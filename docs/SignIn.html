@@ -24,16 +24,13 @@
     <h1>Sign into CardKeeper</h1>
 </div>
 <!--Creates user info entry page-->
-<div class ="UserInput">
-    <div>
-        <label for="Account-Username">Username:</label>
-        <input type="username" id="Account-Username" name="Username" placeholder="Username">
+ <form>
+    <div class ="UserInput">
+            <label for="Account-Username">Username:</label>
+            <input type="text" id="Account-Username" name="Username" placeholder="Username">
+            <label for="Account-Password">Password:</label>
+            <input type="password" id="Account-Password" name="Password" placeholder="Enter Password">
+            <button type = "submit">Sign In</button>
     </div>
-    <div>
-        <label for="Account-Password">Password:</label>
-        <input type="password" id="Account-Password" name="Password" placeholder="Enter Password">
-    </div>
-    <div>
-        <button type = "SignIn">Sign In</button>
-    </div>
-</div>
+</form>
+<p>New to CardKeeper?<a href ="index.html">Create an account</a></p>
