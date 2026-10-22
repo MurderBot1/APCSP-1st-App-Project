@@ -165,6 +165,33 @@ app.get('/api/me', requireAuth, (req, res) => {
     res.json({ ok: true, username: req.username });
 });
 
+app.get('/api/decks', requireAuth, async (req, res) => {
+    try {
+        const [rows] = await db.query('SELECT deck_key FROM decks WHERE username = ?', [req.username]);
+        res.json({ ok: true, decks: rows.map((row) => row.deck_key) });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
+app.get('/api/decks/:deckKey/cards', requireAuth, async (req, res) => {
+    try {
+        const [decks] = await db.query(
+            'SELECT deck_key FROM decks WHERE deck_key = ? AND username = ?',
+            [req.params.deckKey, req.username]
+        );
+        if (!decks[0]) {
+            return res.status(404).json({ error: 'Deck not found' });
+        }
+        const [rows] = await db.query('SELECT card_id FROM deck_cards WHERE deck_key = ?', [req.params.deckKey]);
+        res.json({ ok: true, cards: rows.map((row) => row.card_id) });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
 app.post('/api/logout', async (req, res) => {
     const token = readSessionToken(req);
     try {
