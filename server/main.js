@@ -33,6 +33,21 @@ async function initDatabase() {
             FOREIGN KEY (username) REFERENCES users(username) ON DELETE CASCADE
         )
     `);
+    await db.query(`
+        CREATE TABLE IF NOT EXISTS decks (
+            deck_key CHAR(64) PRIMARY KEY,
+            username VARCHAR(64) NOT NULL,
+            FOREIGN KEY (username) REFERENCES users(username) ON DELETE CASCADE
+        )
+    `);
+    await db.query(`
+        CREATE TABLE IF NOT EXISTS deck_cards (
+            deck_key CHAR(64) NOT NULL,
+            card_id VARCHAR(64) NOT NULL,
+            PRIMARY KEY (deck_key, card_id),
+            FOREIGN KEY (deck_key) REFERENCES decks(deck_key) ON DELETE CASCADE
+        )
+    `);
     await db.query('DELETE FROM sessions WHERE expires_at < NOW()');
 }
 
