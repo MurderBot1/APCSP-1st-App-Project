@@ -25,6 +25,92 @@ async function initDatabase() {
             hash CHAR(128) NOT NULL
         )
     `);
+    await db.query(`
+        CREATE TABLE IF NOT EXISTS sessions (
+            token_hash CHAR(64) PRIMARY KEY,
+            username VARCHAR(64) NOT NULL,
+            expires_at DATETIME NOT NULL,
+            FOREIGN KEY (username) REFERENCES users(username) ON DELETE CASCADE
+        )
+    `);
+    await db.query(`
+        CREATE TABLE IF NOT EXISTS decks (
+            deck_key CHAR(64) PRIMARY KEY,
+            username VARCHAR(64) NOT NULL,
+            name VARCHAR(100) NOT NULL DEFAULT 'Untitled deck',
+            FOREIGN KEY (username) REFERENCES users(username) ON DELETE CASCADE
+        )
+    `);
+    // CREATE TABLE IF NOT EXISTS won't add the column to a table created before it existed
+    const [nameColumn] = await db.query(`
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = DATABASE() AND table_name = 'decks' AND column_name = 'name'
+    `);
+    if (!nameColumn.length) {
+        await db.query("ALTER TABLE decks ADD COLUMN name VARCHAR(100) NOT NULL DEFAULT 'Untitled deck'");
+    }
+    await db.query(`
+        CREATE TABLE IF NOT EXISTS deck_cards (
+            deck_key CHAR(64) NOT NULL,
+            card_id VARCHAR(64) NOT NULL,
+            PRIMARY KEY (deck_key, card_id),
+            FOREIGN KEY (deck_key) REFERENCES decks(deck_key) ON DELETE CASCADE
+        )
+    `);
+    await db.query('DELETE FROM sessions WHERE expires_at < NOW()');
+}
+
+const SESSION_COOKIE = 'session';
+const SESSION_MS = 7 * 24 * 60 * 60 * 1000;
+
+function hashToken(token) {
+    return crypto.createHash('sha256').update(token).digest('hex');
+}
+
+function readSessionToken(req) {
+    const cookies = (req.headers.cookie ?? '').split(';');
+    for (const cookie of cookies) {
+        const [name, ...value] = cookie.trim().split('=');
+        if (name === SESSION_COOKIE) {
+            return value.join('=');
+        }
+    }
+    return null;
+}
+
+function cookieOptions(maxAgeMs) {
+    const secure = process.env.NODE_ENV === 'production' ? '; Secure' : '';
+    return `Path=/; HttpOnly; SameSite=Lax; Max-Age=${Math.floor(maxAgeMs / 1000)}${secure}`;
+}
+
+async function startSession(res, username) {
+    const token = crypto.randomBytes(32).toString('hex');
+    await db.query(
+        'INSERT INTO sessions (token_hash, username, expires_at) VALUES (?, ?, ?)',
+        [hashToken(token), username, new Date(Date.now() + SESSION_MS)]
+    );
+    res.setHeader('Set-Cookie', `${SESSION_COOKIE}=${token}; ${cookieOptions(SESSION_MS)}`);
+}
+
+async function requireAuth(req, res, next) {
+    const token = readSessionToken(req);
+    if (!token) {
+        return res.status(401).json({ error: 'Not logged in' });
+    }
+    try {
+        const [rows] = await db.query(
+            'SELECT username FROM sessions WHERE token_hash = ? AND expires_at > NOW()',
+            [hashToken(token)]
+        );
+        if (!rows[0]) {
+            return res.status(401).json({ error: 'Not logged in' });
+        }
+        req.username = rows[0].username;
+        next();
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Server error' });
+    }
 }
 
 function hashPassword(password, salt) {
@@ -48,6 +134,7 @@ app.post('/api/signup', async (req, res) => {
             'INSERT INTO users (username, salt, hash) VALUES (?, ?, ?)',
             [username, salt, hashPassword(req.body.password, salt)]
         );
+        await startSession(res, username);
         res.status(201).json({ ok: true, username });
     } catch (error) {
         if (error.code === 'ER_DUP_ENTRY') {
@@ -75,7 +162,53 @@ app.post('/api/login', async (req, res) => {
         if (!valid) {
             return res.status(401).json({ error: 'Incorrect username or password' });
         }
+        await startSession(res, username);
         res.json({ ok: true, username });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
+app.get('/api/me', requireAuth, (req, res) => {
+    res.json({ ok: true, username: req.username });
+});
+
+app.get('/api/decks', requireAuth, async (req, res) => {
+    try {
+        const [rows] = await db.query('SELECT deck_key, name FROM decks WHERE username = ?', [req.username]);
+        res.json({ ok: true, decks: rows.map((row) => ({ key: row.deck_key, name: row.name })) });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
+app.get('/api/decks/:deckKey/cards', requireAuth, async (req, res) => {
+    try {
+        const [decks] = await db.query(
+            'SELECT deck_key FROM decks WHERE deck_key = ? AND username = ?',
+            [req.params.deckKey, req.username]
+        );
+        if (!decks[0]) {
+            return res.status(404).json({ error: 'Deck not found' });
+        }
+        const [rows] = await db.query('SELECT card_id FROM deck_cards WHERE deck_key = ?', [req.params.deckKey]);
+        res.json({ ok: true, cards: rows.map((row) => row.card_id) });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
+app.post('/api/logout', async (req, res) => {
+    const token = readSessionToken(req);
+    try {
+        if (token) {
+            await db.query('DELETE FROM sessions WHERE token_hash = ?', [hashToken(token)]);
+        }
+        res.setHeader('Set-Cookie', `${SESSION_COOKIE}=; ${cookieOptions(0)}`);
+        res.json({ ok: true });
     } catch (error) {
         console.error(error);
         res.status(500).json({ error: 'Server error' });
