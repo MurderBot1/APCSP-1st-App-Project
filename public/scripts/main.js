@@ -120,7 +120,7 @@ function renderSearch() {
 
     const nav = container.appendChild(createElement('div'));
     nav.appendChild(createButton('Decks', renderDecks));
-    nav.appendChild(createButton('Log Out', renderLogin));
+    nav.appendChild(createButton('Log Out', logOut));
 }
 
 function renderDecks() {
@@ -135,4 +135,24 @@ function renderSettings() {
     wipeHTML();
 }
 
-renderLogin();
+async function logOut() {
+    await fetch('/api/logout', { method: 'POST' });
+    username = '';
+    renderLogin();
+}
+
+async function restoreSession() {
+    try {
+        const response = await fetch('/api/me');
+        if (response.ok) {
+            username = (await response.json()).username;
+            renderSearch();
+            return;
+        }
+    } catch (error) {
+        console.error(error);
+    }
+    renderLogin();
+}
+
+restoreSession();
