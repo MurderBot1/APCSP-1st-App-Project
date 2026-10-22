@@ -4,8 +4,8 @@
   "description": "CardKeeper app",
   "main": "server/main.js",
   "scripts": {
-    "start": "node server/main.js",
-    "dev": "node --watch server/main.js"
+    "start": "node --env-file-if-exists=.env server/main.js",
+    "dev": "node --watch --env-file-if-exists=.env server/main.js"
   },
   "repository": {
     "type": "git",
@@ -20,6 +20,7 @@
   },
   "homepage": "https://github.com/MurderBot1/APCSP-1st-App-Project#readme",
   "dependencies": {
-    "express": "^5.3.0"
+    "express": "^5.3.0",
+    "mysql2": "^3.24.6"
   }
 }
