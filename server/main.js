@@ -185,6 +185,16 @@ app.get('/api/decks', requireAuth, async (req, res) => {
     }
 });
 
+app.post('/api/decks', requireAuth, async (req, res) => {
+    const key = crypto.randomBytes(32).toString('hex');
+    try {
+        await db.query('INSERT INTO decks (deck_key, username) VALUES (?, ?)', [key, req.username]);
+        res.status(201).json({ ok: true, deck: { key, name: 'Untitled deck' } });
+    } catch (error) {
+        serverError(res, error);
+    }
+});
+
 app.get('/api/decks/:deckKey/cards', requireAuth, async (req, res) => {
     try {
         const [decks] = await db.query(

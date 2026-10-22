@@ -105,6 +105,19 @@
     margin-bottom: 16px;
 }
 
+.CreateDeckButton {
+    position: fixed;
+    bottom: 72px;
+    left: 16px;
+    padding: 10px 16px;
+    border: 2px solid currentColor;
+    border-radius: 8px;
+    background: Canvas;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+}
+
 .DeckBox {
     min-width: 140px;
     padding: 24px 16px;

@@ -252,7 +252,16 @@ async function renderDecks() {
         list.appendChild(createButton(deck.name, () => renderDeck(deck.key), 'DeckBox'));
     }
 
+    container.appendChild(createButton('+ Create Deck', createDeck, 'CreateDeckButton'));
     renderBottomNav('decks');
+}
+
+async function createDeck() {
+    const response = await fetch('/api/decks', { method: 'POST' });
+    if (response.status === 401) {
+        return renderLogin();
+    }
+    renderDecks();
 }
 
 function renderDeck(ID, view) {
