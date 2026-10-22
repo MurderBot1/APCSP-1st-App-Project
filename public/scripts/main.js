@@ -189,8 +189,7 @@ function renderSearch() {
     };
     form.elements['SearchBar'].addEventListener('input', () => {
         clearTimeout(searchTimer);
-        // /cards/search is limited to 2 requests per second, so stay above 500ms
-        searchTimer = setTimeout(runSearch, 600);
+        searchTimer = setTimeout(runSearch, 600); // API has a max rate of 500 MS
     });
     form.addEventListener('submit', (event) => {
         event.preventDefault();

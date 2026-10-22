@@ -60,6 +60,15 @@
     font-weight: bold;
 }
 
+#SearchBar {
+    padding: 8px 12px;
+    border: none;
+    border-radius: 5px;
+    background: rgba(128, 128, 128, 0.25);
+    color: inherit;
+    font: inherit;
+}
+
 .SettingsButton {
     float: right;
     margin-bottom: 12px;
