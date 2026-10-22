@@ -1,0 +1,25 @@
+{
+  "name": "cardkeeper",
+  "version": "1.0.0",
+  "description": "CardKeeper app",
+  "main": "server/main.js",
+  "scripts": {
+    "start": "node server/main.js",
+    "dev": "node --watch server/main.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MurderBot1/APCSP-1st-App-Project.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/MurderBot1/APCSP-1st-App-Project/issues"
+  },
+  "homepage": "https://github.com/MurderBot1/APCSP-1st-App-Project#readme",
+  "dependencies": {
+    "express": "^5.3.0"
+  }
+}
