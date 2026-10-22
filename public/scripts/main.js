@@ -147,8 +147,26 @@ function renderSearch() {
     nav.appendChild(createButton('Log Out', logOut));
 }
 
-function renderDecks() {
+async function renderDecks() {
     wipeHTML();
+
+    const response = await fetch('/api/decks');
+    if (response.status === 401) {
+        return renderLogin();
+    }
+    const { decks = [] } = await response.json();
+
+    const list = container.appendChild(createElement('div', { class: 'DeckList' }));
+    if (!decks.length) {
+        list.appendChild(createElement('p', {}, 'No decks yet'));
+    }
+    for (const deck of decks) {
+        list.appendChild(createButton(deck.name, () => renderDeck(deck.key)));
+        list.lastChild.className = 'DeckBox';
+    }
+
+    const nav = container.appendChild(createElement('div'));
+    nav.appendChild(createButton('Back', renderSearch));
 }
 
 function renderDeck(ID, view) {

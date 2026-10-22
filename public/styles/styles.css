@@ -28,6 +28,28 @@
     cursor: pointer;
 }
 
+.DeckList {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.DeckBox {
+    min-width: 140px;
+    padding: 24px 16px;
+    border: 2px solid currentColor;
+    border-radius: 8px;
+    background: none;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+}
+
+.DeckBox:hover {
+    background: rgba(128, 128, 128, 0.15);
+}
+
 .AuthPage {
     display: flex;
     flex-direction: column;

@@ -37,9 +37,18 @@ async function initDatabase() {
         CREATE TABLE IF NOT EXISTS decks (
             deck_key CHAR(64) PRIMARY KEY,
             username VARCHAR(64) NOT NULL,
+            name VARCHAR(100) NOT NULL DEFAULT 'Untitled deck',
             FOREIGN KEY (username) REFERENCES users(username) ON DELETE CASCADE
         )
     `);
+    // CREATE TABLE IF NOT EXISTS won't add the column to a table created before it existed
+    const [nameColumn] = await db.query(`
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = DATABASE() AND table_name = 'decks' AND column_name = 'name'
+    `);
+    if (!nameColumn.length) {
+        await db.query("ALTER TABLE decks ADD COLUMN name VARCHAR(100) NOT NULL DEFAULT 'Untitled deck'");
+    }
     await db.query(`
         CREATE TABLE IF NOT EXISTS deck_cards (
             deck_key CHAR(64) NOT NULL,
@@ -167,8 +176,8 @@ app.get('/api/me', requireAuth, (req, res) => {
 
 app.get('/api/decks', requireAuth, async (req, res) => {
     try {
-        const [rows] = await db.query('SELECT deck_key FROM decks WHERE username = ?', [req.username]);
-        res.json({ ok: true, decks: rows.map((row) => row.deck_key) });
+        const [rows] = await db.query('SELECT deck_key, name FROM decks WHERE username = ?', [req.username]);
+        res.json({ ok: true, decks: rows.map((row) => ({ key: row.deck_key, name: row.name })) });
     } catch (error) {
         console.error(error);
         res.status(500).json({ error: 'Server error' });
