@@ -1,4 +1,3 @@
-let password = "";
 let username = "";
 
 const container = document.getElementById('body');
@@ -24,6 +23,7 @@ function createField(labelText, type, id, name, placeholder) {
     return fragment;
 }
 
+// got from that one website I visited like 7 years ago with a bunch of copy and paste SVG HTML lines
 const EYE_ICON = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
 const EYE_OFF_ICON = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
 
@@ -57,8 +57,8 @@ function createLink(text, onClick) {
     return link;
 }
 
-function createButton(text, onClick) {
-    const button = createElement('button', { type: 'button' }, text);
+function createButton(text, onClick, className) {
+    const button = createElement('button', className ? { type: 'button', class: className } : { type: 'button' }, text);
     button.addEventListener('click', onClick);
     return button;
 }
@@ -105,47 +105,47 @@ async function searchCards(query) {
     }));
 }
 
-function renderLogin() {
+function renderAuthPage({ title, submitText, endpoint, footerText, linkText, onLinkClick }) {
     wipeHTML();
     container.className = 'AuthPage';
 
     const header = container.appendChild(createElement('div', { class: 'HeaderText' }));
-    header.appendChild(createElement('h1', {}, 'Sign into CardKeeper'));
+    header.appendChild(createElement('h1', {}, title));
 
     const form = container.appendChild(createElement('form'));
     const userInput = form.appendChild(createElement('div', { class: 'UserInput' }));
     userInput.appendChild(createField('Username:', 'text', 'Account-Username', 'Username', 'Username'));
     userInput.appendChild(createPasswordField('Password:', 'Account-Password', 'Password', 'Enter Password'));
-    userInput.appendChild(createElement('button', { type: 'submit' }, 'Sign In'));
+    userInput.appendChild(createElement('button', { type: 'submit' }, submitText));
     form.addEventListener('submit', (event) => {
         event.preventDefault();
-        submitCredentials('/api/login', form);
+        submitCredentials(endpoint, form);
     });
 
-    const footer = container.appendChild(createElement('p', {}, 'New to CardKeeper? '));
-    footer.appendChild(createLink('Create an account', renderSignup));
+    const footer = container.appendChild(createElement('p', {}, footerText));
+    footer.appendChild(createLink(linkText, onLinkClick));
+}
+
+function renderLogin() {
+    renderAuthPage({
+        title: 'Sign into CardKeeper',
+        submitText: 'Sign In',
+        endpoint: '/api/login',
+        footerText: 'New to CardKeeper? ',
+        linkText: 'Create an account',
+        onLinkClick: renderSignup
+    });
 }
 
 function renderSignup() {
-    wipeHTML();
-    container.className = 'AuthPage';
-
-    const header = container.appendChild(createElement('div', { class: 'HeaderText' }));
-    header.appendChild(createElement('h1', {}, 'Sign up for CardKeeper'));
-
-    const form = container.appendChild(createElement('form'));
-    const userInput = form.appendChild(createElement('div', { class: 'UserInput' }));
-    userInput.appendChild(createField('Username:', 'text', 'Account-Username', 'Username', 'Username'));
-    userInput.appendChild(createPasswordField('Password:', 'Account-Password', 'Password', 'Enter Password'));
-    userInput.appendChild(createElement('button', { type: 'submit' }, 'Create Account >'));
-    form.addEventListener('submit', (event) => {
-        event.preventDefault();
-        submitCredentials('/api/signup', form);
+    renderAuthPage({
+        title: 'Sign up for CardKeeper',
+        submitText: 'Create Account >',
+        endpoint: '/api/signup',
+        footerText: 'Already have an account? ',
+        linkText: 'Sign In',
+        onLinkClick: renderLogin
     });
-
-    const footer = container.appendChild(createElement('div'))
-        .appendChild(createElement('p', {}, 'Already have an account? '));
-    footer.appendChild(createLink('Sign In', renderLogin));
 }
 
 function renderBottomNav(active) {
@@ -158,8 +158,7 @@ function renderBottomNav(active) {
 }
 
 function renderSettingsButton() {
-    const button = container.appendChild(createButton('Settings', renderSettings));
-    button.className = 'SettingsButton';
+    container.appendChild(createButton('Settings', renderSettings, 'SettingsButton'));
 }
 
 function renderSearch() {
@@ -213,7 +212,7 @@ async function renderCardResults(results, query, isCurrent) {
         }
         return;
     }
-    // A newer search started while this one was in flight
+
     if (!isCurrent()) {
         return;
     }
@@ -250,8 +249,7 @@ async function renderDecks() {
         list.appendChild(createElement('p', {}, 'No decks yet'));
     }
     for (const deck of decks) {
-        list.appendChild(createButton(deck.name, () => renderDeck(deck.key)));
-        list.lastChild.className = 'DeckBox';
+        list.appendChild(createButton(deck.name, () => renderDeck(deck.key), 'DeckBox'));
     }
 
     renderBottomNav('decks');
