@@ -86,6 +86,25 @@ async function submitCredentials(endpoint, form) {
     renderSearch();
 }
 
+async function searchCards(query) {
+    const response = await fetch(`https://api.scryfall.com/cards/search?unique=prints&q=${encodeURIComponent(query)}`);
+    if (response.status === 404) {
+        return [];
+    }
+    if (!response.ok) {
+        throw new Error(`Card search failed (${response.status})`);
+    }
+    const { data } = await response.json();
+    return data.map((card) => ({
+        id: card.id,
+        name: card.name,
+        type: card.type_line,
+        setName: card.set_name,
+        manaCost: card.mana_cost ?? card.card_faces?.[0]?.mana_cost ?? '',
+        image: (card.image_uris ?? card.card_faces?.[0]?.image_uris)?.small ?? null
+    }));
+}
+
 function renderLogin() {
     wipeHTML();
     container.className = 'AuthPage';
@@ -129,8 +148,24 @@ function renderSignup() {
     footer.appendChild(createLink('Sign In', renderLogin));
 }
 
+function renderBottomNav(active) {
+    const nav = container.appendChild(createElement('nav', { class: 'BottomNav' }));
+    const search = nav.appendChild(createButton('Search', renderSearch));
+    const decks = nav.appendChild(createButton('Decks', renderDecks));
+    const current = active === 'search' ? search : decks;
+    current.className = 'Active';
+    current.setAttribute('aria-current', 'page');
+}
+
+function renderSettingsButton() {
+    const button = container.appendChild(createButton('Settings', renderSettings));
+    button.className = 'SettingsButton';
+}
+
 function renderSearch() {
     wipeHTML();
+    container.className = 'HasBottomNav';
+    renderSettingsButton();
 
     const form = container.appendChild(createElement('form'));
     const searchWrapper = form.appendChild(createElement('div'));
@@ -140,15 +175,70 @@ function renderSearch() {
         name: 'SearchBar',
         placeholder: 'Search for a card...'
     }));
-    form.addEventListener('submit', (event) => event.preventDefault());
+    const results = container.appendChild(createElement('div', { class: 'CardResults' }));
+    let searchTimer;
+    let latestQuery = '';
+    const runSearch = async () => {
+        const query = form.elements['SearchBar'].value.trim();
+        latestQuery = query;
+        if (!query) {
+            results.replaceChildren();
+            return;
+        }
+        await renderCardResults(results, query, () => query === latestQuery);
+    };
+    form.elements['SearchBar'].addEventListener('input', () => {
+        clearTimeout(searchTimer);
+        // /cards/search is limited to 2 requests per second, so stay above 500ms
+        searchTimer = setTimeout(runSearch, 600);
+    });
+    form.addEventListener('submit', (event) => {
+        event.preventDefault();
+        clearTimeout(searchTimer);
+        runSearch();
+    });
 
-    const nav = container.appendChild(createElement('div'));
-    nav.appendChild(createButton('Decks', renderDecks));
-    nav.appendChild(createButton('Log Out', logOut));
+    renderBottomNav('search');
+}
+
+async function renderCardResults(results, query, isCurrent) {
+    results.replaceChildren(createElement('p', {}, 'Searching...'));
+
+    let cards;
+    try {
+        cards = await searchCards(query);
+    } catch (error) {
+        console.error(error);
+        if (isCurrent()) {
+            results.replaceChildren(createElement('p', { class: 'FormError' }, 'Search failed, try again'));
+        }
+        return;
+    }
+    // A newer search started while this one was in flight
+    if (!isCurrent()) {
+        return;
+    }
+
+    if (!cards.length) {
+        results.replaceChildren(createElement('p', {}, 'No cards found'));
+        return;
+    }
+    results.replaceChildren(...cards.map((card) => {
+        const item = createElement('div', { class: 'CardResult' });
+        if (card.image) {
+            item.appendChild(createElement('img', { src: card.image, alt: card.name }));
+        }
+        item.appendChild(createElement('p', {}, card.name));
+        item.appendChild(createElement('small', {}, card.type));
+        item.appendChild(createElement('small', {}, card.setName));
+        return item;
+    }));
 }
 
 async function renderDecks() {
     wipeHTML();
+    container.className = 'HasBottomNav';
+    renderSettingsButton();
 
     const response = await fetch('/api/decks');
     if (response.status === 401) {
@@ -165,8 +255,7 @@ async function renderDecks() {
         list.lastChild.className = 'DeckBox';
     }
 
-    const nav = container.appendChild(createElement('div'));
-    nav.appendChild(createButton('Back', renderSearch));
+    renderBottomNav('decks');
 }
 
 function renderDeck(ID, view) {
@@ -175,6 +264,10 @@ function renderDeck(ID, view) {
 
 function renderSettings() {
     wipeHTML();
+
+    container.appendChild(createElement('h1', {}, 'Settings'));
+    container.appendChild(createButton('Log Out', logOut));
+    container.appendChild(createButton('Back', renderSearch));
 }
 
 async function logOut() {

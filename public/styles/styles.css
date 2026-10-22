@@ -28,6 +28,67 @@
     cursor: pointer;
 }
 
+.HasBottomNav {
+    padding-bottom: 64px;
+}
+
+.BottomNav {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    display: flex;
+}
+
+.BottomNav button {
+    flex: 1;
+    padding: 18px 0;
+    border: none;
+    border-top: 1px solid rgba(128, 128, 128, 0.5);
+    background: Canvas;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+}
+
+.BottomNav button + button {
+    border-left: 1px solid rgba(128, 128, 128, 0.5);
+}
+
+.BottomNav button.Active {
+    background: rgba(128, 128, 128, 0.25);
+    font-weight: bold;
+}
+
+.SettingsButton {
+    float: right;
+    margin-bottom: 12px;
+}
+
+.CardResults {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin: 16px 0;
+}
+
+.CardResult {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 146px;
+    text-align: center;
+}
+
+.CardResult img {
+    width: 146px;
+    border-radius: 6px;
+}
+
+.CardResult p {
+    margin: 4px 0 0;
+}
+
 .DeckList {
     display: flex;
     flex-wrap: wrap;
@@ -63,4 +124,10 @@
 .AuthPage form {
     width: 100%;
     max-width: 320px;
+}
+
+.UserInput input {
+    border: 2px solid grey;
+    padding: 2px 4px;
+    border-radius: 5px
 }
