@@ -24,6 +24,30 @@ function createField(labelText, type, id, name, placeholder) {
     return fragment;
 }
 
+const EYE_ICON = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
+const EYE_OFF_ICON = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
+
+function createPasswordField(labelText, id, name, placeholder) {
+    const fragment = document.createDocumentFragment();
+    fragment.appendChild(createElement('label', { for: id }, labelText));
+
+    const wrapper = fragment.appendChild(createElement('div', { class: 'PasswordWrapper' }));
+    const input = wrapper.appendChild(createElement('input', { type: 'password', id, name, placeholder }));
+    const toggle = wrapper.appendChild(createElement('button', {
+        type: 'button',
+        class: 'PasswordToggle',
+        'aria-label': 'Show password'
+    }));
+    toggle.innerHTML = EYE_ICON;
+    toggle.addEventListener('click', () => {
+        const show = input.type === 'password';
+        input.type = show ? 'text' : 'password';
+        toggle.innerHTML = show ? EYE_OFF_ICON : EYE_ICON;
+        toggle.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
+    });
+    return fragment;
+}
+
 function createLink(text, onClick) {
     const link = createElement('a', { href: '#' }, text);
     link.addEventListener('click', (event) => {
@@ -72,7 +96,7 @@ function renderLogin() {
     const form = container.appendChild(createElement('form'));
     const userInput = form.appendChild(createElement('div', { class: 'UserInput' }));
     userInput.appendChild(createField('Username:', 'text', 'Account-Username', 'Username', 'Username'));
-    userInput.appendChild(createField('Password:', 'password', 'Account-Password', 'Password', 'Enter Password'));
+    userInput.appendChild(createPasswordField('Password:', 'Account-Password', 'Password', 'Enter Password'));
     userInput.appendChild(createElement('button', { type: 'submit' }, 'Sign In'));
     form.addEventListener('submit', (event) => {
         event.preventDefault();
@@ -93,7 +117,7 @@ function renderSignup() {
     const form = container.appendChild(createElement('form'));
     const userInput = form.appendChild(createElement('div', { class: 'UserInput' }));
     userInput.appendChild(createField('Username:', 'text', 'Account-Username', 'Username', 'Username'));
-    userInput.appendChild(createField('Password:', 'password', 'Account-Password', 'Password', 'Enter Password'));
+    userInput.appendChild(createPasswordField('Password:', 'Account-Password', 'Password', 'Enter Password'));
     userInput.appendChild(createElement('button', { type: 'submit' }, 'Create Account >'));
     form.addEventListener('submit', (event) => {
         event.preventDefault();
