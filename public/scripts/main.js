@@ -39,6 +39,29 @@ function createButton(text, onClick) {
     return button;
 }
 
+async function submitCredentials(endpoint, form) {
+    const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            username: form.elements['Username'].value,
+            password: form.elements['Password'].value
+        })
+    });
+    const data = await response.json();
+
+    if (!response.ok) {
+        let error = form.querySelector('.FormError');
+        if (!error) {
+            error = form.appendChild(createElement('p', { class: 'FormError' }));
+        }
+        error.textContent = data.error;
+        return;
+    }
+    username = data.username;
+    renderSearch();
+}
+
 function renderLogin() {
     wipeHTML();
     container.className = 'AuthPage';
@@ -53,7 +76,7 @@ function renderLogin() {
     userInput.appendChild(createElement('button', { type: 'submit' }, 'Sign In'));
     form.addEventListener('submit', (event) => {
         event.preventDefault();
-        renderSearch();
+        submitCredentials('/api/login', form);
     });
 
     const footer = container.appendChild(createElement('p', {}, 'New to CardKeeper? '));
@@ -74,7 +97,7 @@ function renderSignup() {
     userInput.appendChild(createElement('button', { type: 'submit' }, 'Create Account >'));
     form.addEventListener('submit', (event) => {
         event.preventDefault();
-        renderSearch();
+        submitCredentials('/api/signup', form);
     });
 
     const footer = container.appendChild(createElement('div'))
