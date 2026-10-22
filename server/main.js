@@ -68,7 +68,6 @@ async function startSession(res, username) {
     res.setHeader('Set-Cookie', `${SESSION_COOKIE}=${token}; ${cookieOptions(SESSION_MS)}`);
 }
 
-// Sets req.username for logged-in requests; use as middleware on protected routes.
 async function requireAuth(req, res, next) {
     const token = readSessionToken(req);
     if (!token) {
