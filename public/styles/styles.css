@@ -6,3 +6,18 @@
     margin-bottom: 16px;
     width: 100%;
 }
+
+.AuthPage {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    margin: 0;
+    text-align: center;
+}
+
+.AuthPage form {
+    width: 100%;
+    max-width: 320px;
+}
