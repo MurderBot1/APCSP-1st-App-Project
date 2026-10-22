@@ -87,7 +87,7 @@ async function submitCredentials(endpoint, form) {
 }
 
 async function searchCards(query) {
-    const response = await fetch(`https://api.scryfall.com/cards/search?q=${encodeURIComponent(query)}`);
+    const response = await fetch(`https://api.scryfall.com/cards/search?unique=prints&q=${encodeURIComponent(query)}`);
     if (response.status === 404) {
         return [];
     }
@@ -99,6 +99,7 @@ async function searchCards(query) {
         id: card.id,
         name: card.name,
         type: card.type_line,
+        setName: card.set_name,
         manaCost: card.mana_cost ?? card.card_faces?.[0]?.mana_cost ?? '',
         image: (card.image_uris ?? card.card_faces?.[0]?.image_uris)?.small ?? null
     }));
@@ -175,18 +176,32 @@ function renderSearch() {
         placeholder: 'Search for a card...'
     }));
     const results = container.appendChild(createElement('div', { class: 'CardResults' }));
-    form.addEventListener('submit', async (event) => {
-        event.preventDefault();
+    let searchTimer;
+    let latestQuery = '';
+    const runSearch = async () => {
         const query = form.elements['SearchBar'].value.trim();
-        if (query) {
-            await renderCardResults(results, query);
+        latestQuery = query;
+        if (!query) {
+            results.replaceChildren();
+            return;
         }
+        await renderCardResults(results, query, () => query === latestQuery);
+    };
+    form.elements['SearchBar'].addEventListener('input', () => {
+        clearTimeout(searchTimer);
+        // /cards/search is limited to 2 requests per second, so stay above 500ms
+        searchTimer = setTimeout(runSearch, 600);
+    });
+    form.addEventListener('submit', (event) => {
+        event.preventDefault();
+        clearTimeout(searchTimer);
+        runSearch();
     });
 
     renderBottomNav('search');
 }
 
-async function renderCardResults(results, query) {
+async function renderCardResults(results, query, isCurrent) {
     results.replaceChildren(createElement('p', {}, 'Searching...'));
 
     let cards;
@@ -194,7 +209,13 @@ async function renderCardResults(results, query) {
         cards = await searchCards(query);
     } catch (error) {
         console.error(error);
-        results.replaceChildren(createElement('p', { class: 'FormError' }, 'Search failed, try again'));
+        if (isCurrent()) {
+            results.replaceChildren(createElement('p', { class: 'FormError' }, 'Search failed, try again'));
+        }
+        return;
+    }
+    // A newer search started while this one was in flight
+    if (!isCurrent()) {
         return;
     }
 
@@ -209,6 +230,7 @@ async function renderCardResults(results, query) {
         }
         item.appendChild(createElement('p', {}, card.name));
         item.appendChild(createElement('small', {}, card.type));
+        item.appendChild(createElement('small', {}, card.setName));
         return item;
     }));
 }
