@@ -227,8 +227,6 @@ async function renderCardResults(results, query, isCurrent) {
             item.appendChild(createElement('img', { src: card.image, alt: card.name }));
         }
         item.appendChild(createElement('p', {}, card.name));
-        item.appendChild(createElement('small', {}, card.type));
-        item.appendChild(createElement('small', {}, card.setName));
         return item;
     }));
 }
