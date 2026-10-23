@@ -17,47 +17,64 @@ const db = mysql.createPool({
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
+const CREATE_USERS_TABLE = `
+    CREATE TABLE IF NOT EXISTS users (
+        username VARCHAR(64) PRIMARY KEY,
+        salt CHAR(32) NOT NULL,
+        hash CHAR(128) NOT NULL
+    )
+`;
+const CREATE_SESSIONS_TABLE = `
+    CREATE TABLE IF NOT EXISTS sessions (
+        token_hash CHAR(64) PRIMARY KEY,
+        username VARCHAR(64) NOT NULL,
+        expires_at DATETIME NOT NULL,
+        FOREIGN KEY (username) REFERENCES users(username) ON DELETE CASCADE
+    )
+`;
+const CREATE_DECKS_TABLE = `
+    CREATE TABLE IF NOT EXISTS decks (
+        deck_key CHAR(64) PRIMARY KEY,
+        username VARCHAR(64) NOT NULL,
+        name VARCHAR(100) NOT NULL DEFAULT 'Untitled deck',
+        FOREIGN KEY (username) REFERENCES users(username) ON DELETE CASCADE
+    )
+`;
+const CREATE_DECK_CARDS_TABLE = `
+    CREATE TABLE IF NOT EXISTS deck_cards (
+        deck_key CHAR(64) NOT NULL,
+        card_id VARCHAR(64) NOT NULL,
+        PRIMARY KEY (deck_key, card_id),
+        FOREIGN KEY (deck_key) REFERENCES decks(deck_key) ON DELETE CASCADE
+    )
+`;
+const SELECT_DECKS_NAME_COLUMN = `
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = DATABASE() AND table_name = 'decks' AND column_name = 'name'
+`;
+const ADD_DECKS_NAME_COLUMN = "ALTER TABLE decks ADD COLUMN name VARCHAR(100) NOT NULL DEFAULT 'Untitled deck'";
+const DELETE_EXPIRED_SESSIONS = 'DELETE FROM sessions WHERE expires_at < NOW()';
+const INSERT_SESSION = 'INSERT INTO sessions (token_hash, username, expires_at) VALUES (?, ?, ?)';
+const SELECT_SESSION_USER = 'SELECT username FROM sessions WHERE token_hash = ? AND expires_at > NOW()';
+const DELETE_SESSION = 'DELETE FROM sessions WHERE token_hash = ?';
+const INSERT_USER = 'INSERT INTO users (username, salt, hash) VALUES (?, ?, ?)';
+const SELECT_USER_CREDENTIALS = 'SELECT salt, hash FROM users WHERE username = ?';
+const SELECT_USER_DECKS = 'SELECT deck_key, name FROM decks WHERE username = ?';
+const INSERT_DECK = 'INSERT INTO decks (deck_key, username) VALUES (?, ?)';
+const SELECT_OWNED_DECK = 'SELECT deck_key FROM decks WHERE deck_key = ? AND username = ?';
+const SELECT_DECK_CARDS = 'SELECT card_id FROM deck_cards WHERE deck_key = ?';
+
 async function initDatabase() {
-    await db.query(`
-        CREATE TABLE IF NOT EXISTS users (
-            username VARCHAR(64) PRIMARY KEY,
-            salt CHAR(32) NOT NULL,
-            hash CHAR(128) NOT NULL
-        )
-    `);
-    await db.query(`
-        CREATE TABLE IF NOT EXISTS sessions (
-            token_hash CHAR(64) PRIMARY KEY,
-            username VARCHAR(64) NOT NULL,
-            expires_at DATETIME NOT NULL,
-            FOREIGN KEY (username) REFERENCES users(username) ON DELETE CASCADE
-        )
-    `);
-    await db.query(`
-        CREATE TABLE IF NOT EXISTS decks (
-            deck_key CHAR(64) PRIMARY KEY,
-            username VARCHAR(64) NOT NULL,
-            name VARCHAR(100) NOT NULL DEFAULT 'Untitled deck',
-            FOREIGN KEY (username) REFERENCES users(username) ON DELETE CASCADE
-        )
-    `);
+    await db.query(CREATE_USERS_TABLE);
+    await db.query(CREATE_SESSIONS_TABLE);
+    await db.query(CREATE_DECKS_TABLE);
     // CREATE TABLE IF NOT EXISTS won't add the column to a table created before it existed
-    const [nameColumn] = await db.query(`
-        SELECT 1 FROM information_schema.columns
-        WHERE table_schema = DATABASE() AND table_name = 'decks' AND column_name = 'name'
-    `);
+    const [nameColumn] = await db.query(SELECT_DECKS_NAME_COLUMN);
     if (!nameColumn.length) {
-        await db.query("ALTER TABLE decks ADD COLUMN name VARCHAR(100) NOT NULL DEFAULT 'Untitled deck'");
+        await db.query(ADD_DECKS_NAME_COLUMN);
     }
-    await db.query(`
-        CREATE TABLE IF NOT EXISTS deck_cards (
-            deck_key CHAR(64) NOT NULL,
-            card_id VARCHAR(64) NOT NULL,
-            PRIMARY KEY (deck_key, card_id),
-            FOREIGN KEY (deck_key) REFERENCES decks(deck_key) ON DELETE CASCADE
-        )
-    `);
-    await db.query('DELETE FROM sessions WHERE expires_at < NOW()');
+    await db.query(CREATE_DECK_CARDS_TABLE);
+    await db.query(DELETE_EXPIRED_SESSIONS);
 }
 
 const SESSION_COOKIE = 'session';
@@ -85,10 +102,7 @@ function cookieOptions(maxAgeMs) {
 
 async function startSession(res, username) {
     const token = crypto.randomBytes(32).toString('hex');
-    await db.query(
-        'INSERT INTO sessions (token_hash, username, expires_at) VALUES (?, ?, ?)',
-        [hashToken(token), username, new Date(Date.now() + SESSION_MS)]
-    );
+    await db.query(INSERT_SESSION, [hashToken(token), username, new Date(Date.now() + SESSION_MS)]);
     res.setHeader('Set-Cookie', `${SESSION_COOKIE}=${token}; ${cookieOptions(SESSION_MS)}`);
 }
 
@@ -98,10 +112,7 @@ async function requireAuth(req, res, next) {
         return res.status(401).json({ error: 'Not logged in' });
     }
     try {
-        const [rows] = await db.query(
-            'SELECT username FROM sessions WHERE token_hash = ? AND expires_at > NOW()',
-            [hashToken(token)]
-        );
+        const [rows] = await db.query(SELECT_SESSION_USER, [hashToken(token)]);
         if (!rows[0]) {
             return res.status(401).json({ error: 'Not logged in' });
         }
@@ -134,10 +145,7 @@ app.post('/api/signup', async (req, res) => {
     const salt = crypto.randomBytes(16).toString('hex');
 
     try {
-        await db.query(
-            'INSERT INTO users (username, salt, hash) VALUES (?, ?, ?)',
-            [username, salt, hashPassword(req.body.password, salt)]
-        );
+        await db.query(INSERT_USER, [username, salt, hashPassword(req.body.password, salt)]);
         await startSession(res, username);
         res.status(201).json({ ok: true, username });
     } catch (error) {
@@ -155,7 +163,7 @@ app.post('/api/login', async (req, res) => {
     const username = req.body.username.trim();
 
     try {
-        const [rows] = await db.query('SELECT salt, hash FROM users WHERE username = ?', [username]);
+        const [rows] = await db.query(SELECT_USER_CREDENTIALS, [username]);
         const user = rows[0];
 
         const valid = user && crypto.timingSafeEqual(
@@ -178,7 +186,7 @@ app.get('/api/me', requireAuth, (req, res) => {
 
 app.get('/api/decks', requireAuth, async (req, res) => {
     try {
-        const [rows] = await db.query('SELECT deck_key, name FROM decks WHERE username = ?', [req.username]);
+        const [rows] = await db.query(SELECT_USER_DECKS, [req.username]);
         res.json({ ok: true, decks: rows.map((row) => ({ key: row.deck_key, name: row.name })) });
     } catch (error) {
         serverError(res, error);
@@ -188,7 +196,7 @@ app.get('/api/decks', requireAuth, async (req, res) => {
 app.post('/api/decks', requireAuth, async (req, res) => {
     const key = crypto.randomBytes(32).toString('hex');
     try {
-        await db.query('INSERT INTO decks (deck_key, username) VALUES (?, ?)', [key, req.username]);
+        await db.query(INSERT_DECK, [key, req.username]);
         res.status(201).json({ ok: true, deck: { key, name: 'Untitled deck' } });
     } catch (error) {
         serverError(res, error);
@@ -197,14 +205,11 @@ app.post('/api/decks', requireAuth, async (req, res) => {
 
 app.get('/api/decks/:deckKey/cards', requireAuth, async (req, res) => {
     try {
-        const [decks] = await db.query(
-            'SELECT deck_key FROM decks WHERE deck_key = ? AND username = ?',
-            [req.params.deckKey, req.username]
-        );
+        const [decks] = await db.query(SELECT_OWNED_DECK, [req.params.deckKey, req.username]);
         if (!decks[0]) {
             return res.status(404).json({ error: 'Deck not found' });
         }
-        const [rows] = await db.query('SELECT card_id FROM deck_cards WHERE deck_key = ?', [req.params.deckKey]);
+        const [rows] = await db.query(SELECT_DECK_CARDS, [req.params.deckKey]);
         res.json({ ok: true, cards: rows.map((row) => row.card_id) });
     } catch (error) {
         serverError(res, error);
@@ -215,7 +220,7 @@ app.post('/api/logout', async (req, res) => {
     const token = readSessionToken(req);
     try {
         if (token) {
-            await db.query('DELETE FROM sessions WHERE token_hash = ?', [hashToken(token)]);
+            await db.query(DELETE_SESSION, [hashToken(token)]);
         }
         res.setHeader('Set-Cookie', `${SESSION_COOKIE}=; ${cookieOptions(0)}`);
         res.json({ ok: true });
