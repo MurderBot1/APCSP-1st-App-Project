@@ -63,7 +63,7 @@ const SELECT_USER_DECKS = 'SELECT deck_key, name FROM decks WHERE username = ?';
 const INSERT_DECK = 'INSERT INTO decks (deck_key, username) VALUES (?, ?)';
 const SELECT_OWNED_DECK = 'SELECT deck_key FROM decks WHERE deck_key = ? AND username = ?';
 const SELECT_DECK_CARDS = 'SELECT card_id FROM deck_cards WHERE deck_key = ?';
-const CREATE_USER_SETTINGS_TABLE = 'CREATE TABLE IF NOT EXISTS user_settings (username VARCHAR(64) PRIMARY KEY, currency VARCHAR(3) NOT NULL DEFAULT "USD", FOREIGN KEY (username) REFERENCES users(username) ON DELETE CASCADE)';
+const CREATE_USER_SETTINGS_TABLE = 'CREATE TABLE IF NOT EXISTS user_settings (username VARCHAR(64) PRIMARY KEY, currency VARCHAR(3) NOT NULL DEFAULT \'USD\', FOREIGN KEY (username) REFERENCES users(username) ON DELETE CASCADE)';
 
 async function initDatabase() {
     await db.query(CREATE_USERS_TABLE);
@@ -241,7 +241,10 @@ app.get('/api/user-settings', requireAuth, async (req, res) => {
 });
 
 app.post('/api/user-settings', requireAuth, async (req, res) => {
-    const { currency } = req.body;
+    const { currency } = req.body ?? {};
+    if (currency !== 'USD' && currency !== 'EUR') {
+        return res.status(400).json({ error: 'Unsupported currency' });
+    }
 
     try {
         await db.query('INSERT INTO user_settings (username, currency) VALUES (?, ?) ON DUPLICATE KEY UPDATE currency = ?', [req.username, currency, currency]);
