@@ -273,7 +273,6 @@ async function renderCardResults(results, query, isCurrent) {
         if (card.image) {
             item.appendChild(createElement('img', { src: card.image, alt: card.name }));
         }
-        item.appendChild(createElement('p', {}, card.name));
         item.addEventListener('click', () => showCardPopup(card));
         return item;
     }));
