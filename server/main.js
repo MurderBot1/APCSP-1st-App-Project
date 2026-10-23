@@ -254,6 +254,11 @@ app.post('/api/user-settings', requireAuth, async (req, res) => {
     }
 });
 
+// Client-side routes: serve the app for each page so refreshing or opening a link works
+app.get(['/login', '/signup', '/search', '/decks', '/decks/:deckKey', '/settings'], (req, res) => {
+    res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
+});
+
 initDatabase()
     .then(() => {
         app.listen(PORT, () => {

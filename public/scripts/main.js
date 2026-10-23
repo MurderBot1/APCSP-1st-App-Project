@@ -3,7 +3,16 @@ let priceMultiplier = 1.0;
 
 const container = document.getElementById('body');
 
-function wipeHTML() {
+function setPath(path) {
+    if (location.pathname !== path) {
+        history.pushState(null, '', path);
+    }
+}
+
+function wipeHTML(path) {
+    if (path) {
+        setPath(path);
+    }
     container.innerHTML = '';
     container.className = '';
 }
@@ -136,8 +145,8 @@ async function searchCards(query) {
     });
 }
 
-function renderAuthPage({ title, submitText, endpoint, footerText, linkText, onLinkClick }) {
-    wipeHTML();
+function renderAuthPage({ path, title, submitText, endpoint, footerText, linkText, onLinkClick }) {
+    wipeHTML(path);
     container.className = 'AuthPage';
 
     const header = container.appendChild(createElement('div', { class: 'HeaderText' }));
@@ -159,6 +168,7 @@ function renderAuthPage({ title, submitText, endpoint, footerText, linkText, onL
 
 function renderLogin() {
     renderAuthPage({
+        path: '/login',
         title: 'Sign into CardKeeper',
         submitText: 'Sign In',
         endpoint: '/api/login',
@@ -170,6 +180,7 @@ function renderLogin() {
 
 function renderSignup() {
     renderAuthPage({
+        path: '/signup',
         title: 'Sign up for CardKeeper',
         submitText: 'Create Account >',
         endpoint: '/api/signup',
@@ -188,18 +199,21 @@ function renderBottomNav(active) {
     current.setAttribute('aria-current', 'page');
 }
 
-function renderSettingsButton() {
-    const button = container.appendChild(createButton('⚙', renderSettings, 'SettingsButton'));
+function renderSettingsButton(parent = container) {
+    const button = parent.appendChild(createButton('', renderSettings, 'SettingsButton'));
+    // Static markup, so innerHTML is safe here; createElement can't build SVG nodes
+    button.innerHTML = '<svg viewBox="0 0 24 24" width="28" height="28" fill="currentColor" aria-hidden="true"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.488.488 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>';
     button.setAttribute('aria-label', 'Settings');
     button.title = 'Settings';
 }
 
 function renderSearch() {
-    wipeHTML();
+    wipeHTML('/search');
     container.className = 'HasBottomNav';
-    renderSettingsButton();
 
-    const form = container.appendChild(createElement('form'));
+    const topBar = container.appendChild(createElement('div', { class: 'TopBar' }));
+    const form = topBar.appendChild(createElement('form'));
+    renderSettingsButton(topBar);
     const searchWrapper = form.appendChild(createElement('div'));
     searchWrapper.appendChild(createElement('input', {
         type: 'text',
@@ -325,7 +339,7 @@ function showCardPopup(card) {
 }
 
 async function renderDecks() {
-    wipeHTML();
+    wipeHTML('/decks');
     container.className = 'HasBottomNav';
     renderSettingsButton();
 
@@ -356,7 +370,7 @@ async function createDeck() {
 }
 
 function renderDeck(ID, view) {
-    wipeHTML();
+    wipeHTML(`/decks/${encodeURIComponent(ID)}`);
 }
 
 async function getUsdToEurRate() {
@@ -404,7 +418,7 @@ function updateUserPriceMultiplier(currency) {
 }
 
 function renderSettings() {
-    wipeHTML();
+    wipeHTML('/settings');
 
     container.appendChild(createElement('h1', {}, 'Settings'));
     container.appendChild(createButton('Log Out', logOut));
@@ -427,18 +441,40 @@ async function logOut() {
     renderLogin();
 }
 
+function route() {
+    const path = location.pathname;
+    if (!username) {
+        return path === '/signup' ? renderSignup() : renderLogin();
+    }
+    if (path === '/decks') {
+        renderDecks();
+    } else if (path.startsWith('/decks/')) {
+        renderDeck(decodeURIComponent(path.slice('/decks/'.length)));
+    } else if (path === '/settings') {
+        renderSettings();
+    } else {
+        renderSearch();
+    }
+}
+
+window.addEventListener('popstate', route);
+
 async function restoreSession() {
     try {
         const response = await fetch('/api/me');
         if (response.ok) {
             username = (await response.json()).username;
-            renderSearch();
-            return;
         }
     } catch (error) {
         console.error(error);
     }
-    renderLogin();
+    const path = location.pathname;
+    if (username && ['/', '/login', '/signup'].includes(path)) {
+        history.replaceState(null, '', '/search');
+    } else if (!username && path !== '/signup') {
+        history.replaceState(null, '', '/login');
+    }
+    route();
 }
 
 restoreSession();

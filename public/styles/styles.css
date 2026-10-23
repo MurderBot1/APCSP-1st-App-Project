@@ -70,6 +70,21 @@
     width: 100%;
 }
 
+.TopBar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.TopBar form {
+    flex: 1;
+}
+
+.TopBar .SettingsButton {
+    float: none;
+    margin-bottom: 0;
+}
+
 .SettingsButton {
     float: right;
     margin-bottom: 12px;
