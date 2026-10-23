@@ -136,21 +136,50 @@
 
 .AuthPage {
     display: flex;
+    background-color: rgb(44, 39, 39);
     flex-direction: column;
     align-items: center;
+    font-family: system-ui, sans-serif;
     justify-content: center;
     min-height: 100vh;
+    color:rgb(60, 255, 0);
     margin: 0;
     text-align: center;
+}
+
+a:link{
+    color: rgb(143, 211, 186);
+    text-decoration: none;
 }
 
 .AuthPage form {
     width: 100%;
     max-width: 320px;
+    color: rgb(60, 255, 0);
 }
+.UserInput input:focus,
+.AuthPage form:focus {
+    outline: rgb(60, 255, 0) solid 2px;
+}
+
 
 .UserInput input {
     border: 2px solid grey;
     padding: 2px 4px;
+    background-color: rgb(44, 39, 39);
     border-radius: 5px
+}
+
+.AuthPage button[type="submit"] {
+    background-color: rgb(44, 39, 39);
+    border-radius: 5px;
+    font-family: system-ui, sans-serif;
+    border: solid grey 2px;
+    color: rgb(60, 255, 0);
+}
+
+.AuthPage button[type="submit"]:hover {
+    background-color: rgb(5, 5, 5);
+    color: rgb(60, 255, 0);
+    border: solid rgb(70, 60, 60) 2px;
 }
