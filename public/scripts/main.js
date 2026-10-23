@@ -105,14 +105,35 @@ async function searchCards(query) {
         throw new Error(`Card search failed (${response.status})`);
     }
     const { data } = await response.json();
-    return data.map((card) => ({
-        id: card.id,
-        name: card.name,
-        type: card.type_line,
-        setName: card.set_name,
-        manaCost: card.mana_cost ?? card.card_faces?.[0]?.mana_cost ?? '',
-        image: (card.image_uris ?? card.card_faces?.[0]?.image_uris)?.small ?? null
-    }));
+    return data.map((card) => {
+        const images = card.image_uris ?? card.card_faces?.[0]?.image_uris;
+        return {
+            id: card.id,
+            name: card.name,
+            type: card.type_line,
+            setName: card.set_name,
+            manaCost: card.mana_cost ?? card.card_faces?.[0]?.mana_cost ?? '',
+            image: images?.small ?? null,
+            largeImage: images?.large ?? images?.normal ?? null,
+            // Double-faced cards keep their text on each face
+            faces: (card.card_faces ?? [card]).map((face) => ({
+                name: face.name,
+                manaCost: face.mana_cost ?? '',
+                type: face.type_line ?? card.type_line,
+                text: face.oracle_text ?? '',
+                flavor: face.flavor_text ?? '',
+                power: face.power,
+                toughness: face.toughness,
+                loyalty: face.loyalty
+            })),
+            rarity: card.rarity,
+            setCode: card.set,
+            collectorNumber: card.collector_number,
+            artist: card.artist,
+            releasedAt: card.released_at,
+            prices: card.prices ?? {}
+        };
+    });
 }
 
 function renderAuthPage({ title, submitText, endpoint, footerText, linkText, onLinkClick }) {
@@ -168,7 +189,9 @@ function renderBottomNav(active) {
 }
 
 function renderSettingsButton() {
-    container.appendChild(createButton('Settings', renderSettings, 'SettingsButton'));
+    const button = container.appendChild(createButton('⚙', renderSettings, 'SettingsButton'));
+    button.setAttribute('aria-label', 'Settings');
+    button.title = 'Settings';
 }
 
 function renderSearch() {
@@ -232,13 +255,73 @@ async function renderCardResults(results, query, isCurrent) {
         return;
     }
     results.replaceChildren(...cards.map((card) => {
-        const item = createElement('div', { class: 'CardResult' });
+        const item = createElement('button', { type: 'button', class: 'CardResult' });
         if (card.image) {
             item.appendChild(createElement('img', { src: card.image, alt: card.name }));
         }
         item.appendChild(createElement('p', {}, card.name));
+        item.addEventListener('click', () => showCardPopup(card));
         return item;
     }));
+}
+
+function showCardPopup(card) {
+    const dialog = document.body.appendChild(createElement('dialog', { class: 'CardPopup' }));
+    dialog.addEventListener('close', () => dialog.remove());
+    // Clicking the backdrop (the dialog element itself) closes it
+    dialog.addEventListener('click', (event) => {
+        if (event.target === dialog) {
+            dialog.close();
+        }
+    });
+
+    const closeButton = createButton('×', () => dialog.close(), 'CardPopupClose');
+    closeButton.setAttribute('aria-label', 'Close');
+    dialog.appendChild(closeButton);
+
+    const image = dialog.appendChild(createElement('div', { class: 'CardPopupImage' }));
+    if (card.largeImage) {
+        image.appendChild(createElement('img', { src: card.largeImage, alt: card.name }));
+    }
+
+    const info = dialog.appendChild(createElement('div', { class: 'CardPopupInfo' }));
+    info.appendChild(createElement('h2', {}, card.name));
+    for (const face of card.faces) {
+        const section = info.appendChild(createElement('section'));
+        if (card.faces.length > 1) {
+            section.appendChild(createElement('h3', {}, face.name));
+        }
+        const heading = [face.type, face.manaCost].filter(Boolean).join(' — ');
+        section.appendChild(createElement('p', { class: 'CardPopupType' }, heading));
+        for (const line of face.text.split('\n').filter(Boolean)) {
+            section.appendChild(createElement('p', {}, line));
+        }
+        if (face.flavor) {
+            section.appendChild(createElement('p', { class: 'CardPopupFlavor' }, face.flavor));
+        }
+        if (face.power !== undefined) {
+            section.appendChild(createElement('p', {}, `${face.power}/${face.toughness}`));
+        }
+        if (face.loyalty !== undefined) {
+            section.appendChild(createElement('p', {}, `Loyalty: ${face.loyalty}`));
+        }
+    }
+
+    const details = [
+        ['Set', `${card.setName} (${card.setCode.toUpperCase()}) #${card.collectorNumber}`],
+        ['Rarity', card.rarity],
+        ['Artist', card.artist],
+        ['Released', card.releasedAt],
+        ['Price (USD)', card.prices.usd && `$${card.prices.usd}`],
+        ['Price (USD foil)', card.prices.usd_foil && `$${card.prices.usd_foil}`]
+    ].filter(([, value]) => value);
+    const list = info.appendChild(createElement('dl', { class: 'CardPopupDetails' }));
+    for (const [label, value] of details) {
+        list.appendChild(createElement('dt', {}, label));
+        list.appendChild(createElement('dd', {}, value));
+    }
+
+    dialog.showModal();
 }
 
 async function renderDecks() {
