@@ -60,6 +60,15 @@
     font-weight: bold;
 }
 
+#SearchBar {
+    padding: 8px 12px;
+    border: none;
+    border-radius: 5px;
+    background: rgba(128, 128, 128, 0.25);
+    color: inherit;
+    font: inherit;
+}
+
 .SettingsButton {
     float: right;
     margin-bottom: 12px;
@@ -94,6 +103,19 @@
     flex-wrap: wrap;
     gap: 12px;
     margin-bottom: 16px;
+}
+
+.CreateDeckButton {
+    position: fixed;
+    bottom: 72px;
+    left: 16px;
+    padding: 10px 16px;
+    border: 2px solid currentColor;
+    border-radius: 8px;
+    background: Canvas;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
 }
 
 .DeckBox {

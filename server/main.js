@@ -108,9 +108,13 @@ async function requireAuth(req, res, next) {
         req.username = rows[0].username;
         next();
     } catch (error) {
-        console.error(error);
-        res.status(500).json({ error: 'Server error' });
+        serverError(res, error);
     }
+}
+
+function serverError(res, error) {
+    console.error(error);
+    res.status(500).json({ error: 'Server error' });
 }
 
 function hashPassword(password, salt) {
@@ -140,8 +144,7 @@ app.post('/api/signup', async (req, res) => {
         if (error.code === 'ER_DUP_ENTRY') {
             return res.status(409).json({ error: 'That username is already taken' });
         }
-        console.error(error);
-        res.status(500).json({ error: 'Server error' });
+        serverError(res, error);
     }
 });
 
@@ -165,8 +168,7 @@ app.post('/api/login', async (req, res) => {
         await startSession(res, username);
         res.json({ ok: true, username });
     } catch (error) {
-        console.error(error);
-        res.status(500).json({ error: 'Server error' });
+        serverError(res, error);
     }
 });
 
@@ -179,8 +181,17 @@ app.get('/api/decks', requireAuth, async (req, res) => {
         const [rows] = await db.query('SELECT deck_key, name FROM decks WHERE username = ?', [req.username]);
         res.json({ ok: true, decks: rows.map((row) => ({ key: row.deck_key, name: row.name })) });
     } catch (error) {
-        console.error(error);
-        res.status(500).json({ error: 'Server error' });
+        serverError(res, error);
+    }
+});
+
+app.post('/api/decks', requireAuth, async (req, res) => {
+    const key = crypto.randomBytes(32).toString('hex');
+    try {
+        await db.query('INSERT INTO decks (deck_key, username) VALUES (?, ?)', [key, req.username]);
+        res.status(201).json({ ok: true, deck: { key, name: 'Untitled deck' } });
+    } catch (error) {
+        serverError(res, error);
     }
 });
 
@@ -196,8 +207,7 @@ app.get('/api/decks/:deckKey/cards', requireAuth, async (req, res) => {
         const [rows] = await db.query('SELECT card_id FROM deck_cards WHERE deck_key = ?', [req.params.deckKey]);
         res.json({ ok: true, cards: rows.map((row) => row.card_id) });
     } catch (error) {
-        console.error(error);
-        res.status(500).json({ error: 'Server error' });
+        serverError(res, error);
     }
 });
 
@@ -210,8 +220,7 @@ app.post('/api/logout', async (req, res) => {
         res.setHeader('Set-Cookie', `${SESSION_COOKIE}=; ${cookieOptions(0)}`);
         res.json({ ok: true });
     } catch (error) {
-        console.error(error);
-        res.status(500).json({ error: 'Server error' });
+        serverError(res, error);
     }
 });
 
