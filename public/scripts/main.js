@@ -1,4 +1,5 @@
 let username = "";
+let priceMultiplier = 1.0;
 
 const container = document.getElementById('body');
 
@@ -61,6 +62,15 @@ function createButton(text, onClick, className) {
     const button = createElement('button', className ? { type: 'button', class: className } : { type: 'button' }, text);
     button.addEventListener('click', onClick);
     return button;
+}
+
+function createDropdown(options, onChange) {
+    const select = createElement('select');
+    for (const option of options) {
+        select.appendChild(createElement('option', { value: option.value }, option.text));
+    }
+    select.addEventListener('change', () => onChange(select.value));
+    return select;
 }
 
 async function submitCredentials(endpoint, form) {
@@ -266,12 +276,66 @@ function renderDeck(ID, view) {
     wipeHTML();
 }
 
+async function getUsdToEurRate() {
+    const url = 'https://api.frankfurter.dev/v2/rate/usd/eur';
+
+    try {
+        const response = await fetch(url);
+        if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
+
+        const data = await response.json();
+        console.log(`1 ${data.base} = ${data.rate} ${data.quote} (Date: ${data.date})`);
+        return data.rate;
+    } catch (error) {
+        console.error('Failed to fetch rate:', error);
+    }
+}
+
+function getUserSettings() {
+    const response = fetch('/api/user-settings')
+        .then(response => response.json())
+        .then(data => {
+            if (data.ok) {
+                priceMultiplier = data.currency === 'EUR' ? getUsdToEurRate() : 1.0;
+            } else {
+                console.error('Failed to fetch user settings:', data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Error fetching user settings:', error);
+        });
+
+}
+
+function updateUserPriceMultiplier(currency) {
+    switch (currency) {
+        case "USD":
+            priceMultiplier = 1.0;
+            break;
+        case "EUR":
+            priceMultiplier = getUsdToEurRate();
+            break;
+        default:
+            priceMultiplier = 1.0;
+    }
+}
+
 function renderSettings() {
     wipeHTML();
 
     container.appendChild(createElement('h1', {}, 'Settings'));
     container.appendChild(createButton('Log Out', logOut));
     container.appendChild(createButton('Back', renderSearch));
+    container.appendChild(createDropdown([{ value: "USD", text: "US Dollar" }, { value: "EUR", text: "Euro" }], (value) => {
+       updateUserPriceMultiplier(value);
+       fetch('/api/user-settings', {
+           method: 'POST',
+           headers: {
+               'Content-Type': 'application/json'
+           },
+           body: JSON.stringify({ currency: value })
+       });
+   }));
 }
 
 async function logOut() {
