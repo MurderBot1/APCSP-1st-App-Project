@@ -63,11 +63,13 @@ const SELECT_USER_DECKS = 'SELECT deck_key, name FROM decks WHERE username = ?';
 const INSERT_DECK = 'INSERT INTO decks (deck_key, username) VALUES (?, ?)';
 const SELECT_OWNED_DECK = 'SELECT deck_key FROM decks WHERE deck_key = ? AND username = ?';
 const SELECT_DECK_CARDS = 'SELECT card_id FROM deck_cards WHERE deck_key = ?';
+const CREATE_USER_SETTINGS_TABLE = 'CREATE TABLE IF NOT EXISTS user_settings (username VARCHAR(64) PRIMARY KEY, currency VARCHAR(3) NOT NULL DEFAULT "USD", FOREIGN KEY (username) REFERENCES users(username) ON DELETE CASCADE)';
 
 async function initDatabase() {
     await db.query(CREATE_USERS_TABLE);
     await db.query(CREATE_SESSIONS_TABLE);
     await db.query(CREATE_DECKS_TABLE);
+    await db.query(CREATE_USER_SETTINGS_TABLE);
     // CREATE TABLE IF NOT EXISTS won't add the column to a table created before it existed
     const [nameColumn] = await db.query(SELECT_DECKS_NAME_COLUMN);
     if (!nameColumn.length) {
@@ -224,6 +226,26 @@ app.post('/api/logout', async (req, res) => {
         }
         res.setHeader('Set-Cookie', `${SESSION_COOKIE}=; ${cookieOptions(0)}`);
         res.json({ ok: true });
+    } catch (error) {
+        serverError(res, error);
+    }
+});
+
+app.get('/api/user-settings', requireAuth, async (req, res) => {
+    try {
+        const [rows] = await db.query('SELECT currency FROM user_settings WHERE username = ?', [req.username]);
+        res.json({ ok: true, currency: rows[0]?.currency || 'USD' });
+    } catch (error) {
+        serverError(res, error);
+    }
+});
+
+app.post('/api/user-settings', requireAuth, async (req, res) => {
+    const { currency } = req.body;
+
+    try {
+        await db.query('INSERT INTO user_settings (username, currency) VALUES (?, ?) ON DUPLICATE KEY UPDATE currency = ?', [req.username, currency, currency]);
+        res.json({ ok: true, currency });
     } catch (error) {
         serverError(res, error);
     }
