@@ -70,6 +70,65 @@
     width: 100%;
 }
 
+.DeckToolbar {
+    position: fixed;
+    top: 16px;
+    left: 16px;
+    display: flex;
+    gap: 12px;
+}
+
+.ViewToggle {
+    display: flex;
+    border: 2px solid currentColor;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.ViewToggle button {
+    display: flex;
+    align-items: center;
+    padding: 8px 10px;
+    border: none;
+    background: Canvas;
+    color: inherit;
+    cursor: pointer;
+}
+
+.ViewToggle button + button {
+    border-left: 2px solid currentColor;
+}
+
+.ViewToggle button.Active {
+    background: linear-gradient(rgba(128, 128, 128, 0.25), rgba(128, 128, 128, 0.25)), Canvas;
+}
+
+.DeckCards {
+    padding-top: 64px;
+}
+
+.DeckCards.cardsView {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.DeckCards.listView {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.BackButton {
+    padding: 8px 14px;
+    border: 2px solid currentColor;
+    border-radius: 8px;
+    background: Canvas;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+}
+
 .TopBar {
     display: flex;
     align-items: center;

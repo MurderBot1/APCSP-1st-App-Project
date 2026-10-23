@@ -1,5 +1,6 @@
 let username = "";
-let priceMultiplier = 1.0;
+let currency = 'USD';
+let usdToEurRate = null;
 
 const container = document.getElementById('body');
 
@@ -102,6 +103,7 @@ async function submitCredentials(endpoint, form) {
         return;
     }
     username = data.username;
+    await loadCurrency();
     renderSearch();
 }
 
@@ -124,7 +126,6 @@ async function searchCards(query) {
             manaCost: card.mana_cost ?? card.card_faces?.[0]?.mana_cost ?? '',
             image: images?.small ?? null,
             largeImage: images?.large ?? images?.normal ?? null,
-            // Double-faced cards keep their text on each face
             faces: (card.card_faces ?? [card]).map((face) => ({
                 name: face.name,
                 manaCost: face.mana_cost ?? '',
@@ -201,7 +202,6 @@ function renderBottomNav(active) {
 
 function renderSettingsButton(parent = container) {
     const button = parent.appendChild(createButton('', renderSettings, 'SettingsButton'));
-    // Static markup, so innerHTML is safe here; createElement can't build SVG nodes
     button.innerHTML = '<svg viewBox="0 0 24 24" width="28" height="28" fill="currentColor" aria-hidden="true"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.488.488 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>';
     button.setAttribute('aria-label', 'Settings');
     button.title = 'Settings';
@@ -282,7 +282,6 @@ async function renderCardResults(results, query, isCurrent) {
 function showCardPopup(card) {
     const dialog = document.body.appendChild(createElement('dialog', { class: 'CardPopup' }));
     dialog.addEventListener('close', () => dialog.remove());
-    // Clicking the backdrop (the dialog element itself) closes it
     dialog.addEventListener('click', (event) => {
         if (event.target === dialog) {
             dialog.close();
@@ -326,8 +325,8 @@ function showCardPopup(card) {
         ['Rarity', card.rarity],
         ['Artist', card.artist],
         ['Released', card.releasedAt],
-        ['Price (USD)', card.prices.usd && `$${card.prices.usd}`],
-        ['Price (USD foil)', card.prices.usd_foil && `$${card.prices.usd_foil}`]
+        ['Price', formatPrice(card.prices.usd)],
+        ['Price (foil)', formatPrice(card.prices.usd_foil)]
     ].filter(([, value]) => value);
     const list = info.appendChild(createElement('dl', { class: 'CardPopupDetails' }));
     for (const [label, value] of details) {
@@ -369,8 +368,41 @@ async function createDeck() {
     renderDecks();
 }
 
-function renderDeck(ID, view) {
+const VIEW_ICONS = {
+    list: '<path d="M3 5h18v2H3zm0 6h18v2H3zm0 6h18v2H3z"/>',
+    cards: '<path d="M3 3h8v8H3zm10 0h8v8h-8zM3 13h8v8H3zm10 0h8v8h-8z"/>'
+};
+
+const DECK_VIEW_COOKIE = 'deckView';
+
+function readDeckView() {
+    const match = document.cookie.match(new RegExp(`(?:^|; )${DECK_VIEW_COOKIE}=(list|cards)`));
+    return match ? match[1] : 'cards';
+}
+
+function saveDeckView(view) {
+    document.cookie = `${DECK_VIEW_COOKIE}=${view}; Path=/; Max-Age=31536000; SameSite=Lax`;
+}
+
+function renderDeck(ID, view = readDeckView()) {
     wipeHTML(`/decks/${encodeURIComponent(ID)}`);
+
+    const toolbar = container.appendChild(createElement('div', { class: 'DeckToolbar' }));
+    toolbar.appendChild(createButton('← Back', renderDecks, 'BackButton'));
+
+    const toggle = toolbar.appendChild(createElement('div', { class: 'ViewToggle', role: 'group', 'aria-label': 'Deck view' }));
+    const cards = container.appendChild(createElement('div', { class: `DeckCards ${view}View` }));
+    for (const [name, label] of [['list', 'List view'], ['cards', 'Card view']]) {
+        const button = toggle.appendChild(createButton('', () => {
+            toggle.querySelector('.Active')?.classList.remove('Active');
+            button.classList.add('Active');
+            cards.className = `DeckCards ${name}View`;
+            saveDeckView(name);
+        }, name === view ? 'Active' : ''));
+        button.setAttribute('aria-label', label);
+        button.title = label;
+        button.innerHTML = `<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true">${VIEW_ICONS[name]}</svg>`;
+    }
 }
 
 async function getUsdToEurRate() {
@@ -388,33 +420,29 @@ async function getUsdToEurRate() {
     }
 }
 
-function getUserSettings() {
-    const response = fetch('/api/user-settings')
-        .then(response => response.json())
-        .then(data => {
-            if (data.ok) {
-                priceMultiplier = data.currency === 'EUR' ? getUsdToEurRate() : 1.0;
-            } else {
-                console.error('Failed to fetch user settings:', data.error);
-            }
-        })
-        .catch(error => {
-            console.error('Error fetching user settings:', error);
-        });
-
+async function setCurrency(newCurrency) {
+    if (newCurrency === 'EUR' && !usdToEurRate) {
+        usdToEurRate = await getUsdToEurRate();
+    }
+    currency = newCurrency === 'EUR' && usdToEurRate ? 'EUR' : 'USD';
 }
 
-function updateUserPriceMultiplier(currency) {
-    switch (currency) {
-        case "USD":
-            priceMultiplier = 1.0;
-            break;
-        case "EUR":
-            priceMultiplier = getUsdToEurRate();
-            break;
-        default:
-            priceMultiplier = 1.0;
+async function loadCurrency() {
+    try {
+        const response = await fetch('/api/user-settings');
+        if (response.ok) {
+            await setCurrency((await response.json()).currency);
+        }
+    } catch (error) {
+        console.error('Error fetching user settings:', error);
     }
+}
+
+function formatPrice(usd) {
+    if (!usd) {
+        return '';
+    }
+    return currency === 'EUR' ? `€${(usd * usdToEurRate).toFixed(2)}` : `$${usd}`;
 }
 
 function renderSettings() {
@@ -423,8 +451,8 @@ function renderSettings() {
     container.appendChild(createElement('h1', {}, 'Settings'));
     container.appendChild(createButton('Log Out', logOut));
     container.appendChild(createButton('Back', renderSearch));
-    container.appendChild(createDropdown([{ value: "USD", text: "US Dollar" }, { value: "EUR", text: "Euro" }], (value) => {
-       updateUserPriceMultiplier(value);
+    const dropdown = container.appendChild(createDropdown([{ value: "USD", text: "US Dollar" }, { value: "EUR", text: "Euro" }], async (value) => {
+       await setCurrency(value);
        fetch('/api/user-settings', {
            method: 'POST',
            headers: {
@@ -433,11 +461,13 @@ function renderSettings() {
            body: JSON.stringify({ currency: value })
        });
    }));
+    dropdown.value = currency;
 }
 
 async function logOut() {
     await fetch('/api/logout', { method: 'POST' });
     username = '';
+    currency = 'USD';
     renderLogin();
 }
 
@@ -464,6 +494,7 @@ async function restoreSession() {
         const response = await fetch('/api/me');
         if (response.ok) {
             username = (await response.json()).username;
+            await loadCurrency();
         }
     } catch (error) {
         console.error(error);
