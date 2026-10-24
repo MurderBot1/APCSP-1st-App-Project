@@ -1,3 +1,18 @@
+:root {
+    --surface: Canvas;
+    --outline: currentColor;
+    --tint: rgba(128, 128, 128, 0.25);
+    --tint-weak: rgba(128, 128, 128, 0.15);
+    --divider: rgba(128, 128, 128, 0.5);
+    --backdrop: rgba(0, 0, 0, 0.6);
+    --accent: rgb(60, 255, 0);
+    --link: rgb(143, 211, 186);
+    --auth-bg: rgb(44, 39, 39);
+    --auth-border: grey;
+    --auth-input-bg: rgb(5, 5, 5);
+    --auth-input-border: rgb(70, 60, 60);
+}
+
 .UserInput {
     display: flex;
     flex-direction: column;
@@ -44,19 +59,19 @@
     flex: 1;
     padding: 18px 0;
     border: none;
-    border-top: 1px solid rgba(128, 128, 128, 0.5);
-    background: Canvas;
+    border-top: 1px solid var(--divider);
+    background: var(--surface);
     color: inherit;
     font: inherit;
     cursor: pointer;
 }
 
 .BottomNav button + button {
-    border-left: 1px solid rgba(128, 128, 128, 0.5);
+    border-left: 1px solid var(--divider);
 }
 
 .BottomNav button.Active {
-    background: linear-gradient(rgba(128, 128, 128, 0.25), rgba(128, 128, 128, 0.25)), Canvas;
+    background: linear-gradient(var(--tint), var(--tint)), var(--surface);
     font-weight: bold;
 }
 
@@ -64,7 +79,7 @@
     padding: 8px 12px;
     border: none;
     border-radius: 5px;
-    background: rgba(128, 128, 128, 0.25);
+    background: var(--tint);
     color: inherit;
     font: inherit;
     width: 100%;
@@ -80,7 +95,7 @@
 
 .ViewToggle {
     display: flex;
-    border: 2px solid currentColor;
+    border: 2px solid var(--outline);
     border-radius: 8px;
     overflow: hidden;
 }
@@ -90,17 +105,17 @@
     align-items: center;
     padding: 8px 10px;
     border: none;
-    background: Canvas;
+    background: var(--surface);
     color: inherit;
     cursor: pointer;
 }
 
 .ViewToggle button + button {
-    border-left: 2px solid currentColor;
+    border-left: 2px solid var(--outline);
 }
 
 .ViewToggle button.Active {
-    background: linear-gradient(rgba(128, 128, 128, 0.25), rgba(128, 128, 128, 0.25)), Canvas;
+    background: linear-gradient(var(--tint), var(--tint)), var(--surface);
 }
 
 .DeckCards {
@@ -121,9 +136,9 @@
 
 .BackButton {
     padding: 8px 14px;
-    border: 2px solid currentColor;
+    border: 2px solid var(--outline);
     border-radius: 8px;
-    background: Canvas;
+    background: var(--surface);
     color: inherit;
     font: inherit;
     cursor: pointer;
@@ -185,9 +200,9 @@
     width: min(860px, 94vw);
     max-height: 90vh;
     padding: 24px;
-    border: 2px solid currentColor;
+    border: 2px solid var(--outline);
     border-radius: 12px;
-    background: Canvas;
+    background: var(--surface);
     color: inherit;
     overflow: auto;
 }
@@ -198,7 +213,7 @@
 }
 
 .CardPopup::backdrop {
-    background: rgba(0, 0, 0, 0.6);
+    background: var(--backdrop);
 }
 
 .CardPopupClose {
@@ -277,9 +292,9 @@
     bottom: 72px;
     right: 16px;
     padding: 10px 16px;
-    border: 2px solid currentColor;
+    border: 2px solid var(--outline);
     border-radius: 8px;
-    background: Canvas;
+    background: var(--surface);
     color: inherit;
     font: inherit;
     cursor: pointer;
@@ -288,7 +303,7 @@
 .DeckBox {
     min-width: 140px;
     padding: 24px 16px;
-    border: 2px solid currentColor;
+    border: 2px solid var(--outline);
     border-radius: 8px;
     background: none;
     color: inherit;
@@ -297,55 +312,55 @@
 }
 
 .DeckBox:hover {
-    background: rgba(128, 128, 128, 0.15);
+    background: var(--tint-weak);
 }
 
 .AuthPage {
     display: flex;
-    background-color: rgb(44, 39, 39);
+    background-color: var(--auth-bg);
     flex-direction: column;
     align-items: center;
     font-family: system-ui, sans-serif;
     justify-content: center;
     min-height: 100vh;
-    color:rgb(60, 255, 0);
+    color:var(--accent);
     margin: 0;
     text-align: center;
 }
 
 a:link{
-    color: rgb(143, 211, 186);
+    color: var(--link);
     text-decoration: none;
 }
 
 .AuthPage form {
     width: 100%;
     max-width: 320px;
-    color: rgb(60, 255, 0);
+    color: var(--accent);
 }
 .UserInput input:focus,
 .AuthPage form:focus {
-    outline: rgb(60, 255, 0) solid 2px;
+    outline: var(--accent) solid 2px;
 }
 
 
 .UserInput input {
-    border: 2px solid grey;
+    border: 2px solid var(--auth-border);
     padding: 2px 4px;
-    background-color: rgb(44, 39, 39);
+    background-color: var(--auth-bg);
     border-radius: 5px
 }
 
 .AuthPage button[type="submit"] {
-    background-color: rgb(44, 39, 39);
+    background-color: var(--auth-bg);
     border-radius: 5px;
     font-family: system-ui, sans-serif;
-    border: solid grey 2px;
-    color: rgb(60, 255, 0);
+    border: solid var(--auth-border) 2px;
+    color: var(--accent);
 }
 
 .AuthPage button[type="submit"]:hover {
-    background-color: rgb(5, 5, 5);
-    color: rgb(60, 255, 0);
-    border: solid rgb(70, 60, 60) 2px;
+    background-color: var(--auth-input-bg);
+    color: var(--accent);
+    border: solid var(--auth-input-border) 2px;
 }
