@@ -116,34 +116,52 @@ async function searchCards(query) {
         throw new Error(`Card search failed (${response.status})`);
     }
     const { data } = await response.json();
-    return data.map((card) => {
-        const images = card.image_uris ?? card.card_faces?.[0]?.image_uris;
-        return {
-            id: card.id,
-            name: card.name,
-            type: card.type_line,
-            setName: card.set_name,
-            manaCost: card.mana_cost ?? card.card_faces?.[0]?.mana_cost ?? '',
-            image: images?.small ?? null,
-            largeImage: images?.large ?? images?.normal ?? null,
-            faces: (card.card_faces ?? [card]).map((face) => ({
-                name: face.name,
-                manaCost: face.mana_cost ?? '',
-                type: face.type_line ?? card.type_line,
-                text: face.oracle_text ?? '',
-                flavor: face.flavor_text ?? '',
-                power: face.power,
-                toughness: face.toughness,
-                loyalty: face.loyalty
-            })),
-            rarity: card.rarity,
-            setCode: card.set,
-            collectorNumber: card.collector_number,
-            artist: card.artist,
-            releasedAt: card.released_at,
-            prices: card.prices ?? {}
-        };
-    });
+    return data.map(mapCard);
+}
+
+function mapCard(card) {
+    const images = card.image_uris ?? card.card_faces?.[0]?.image_uris;
+    return {
+        id: card.id,
+        name: card.name,
+        type: card.type_line,
+        setName: card.set_name,
+        manaCost: card.mana_cost ?? card.card_faces?.[0]?.mana_cost ?? '',
+        image: images?.small ?? null,
+        largeImage: images?.large ?? images?.normal ?? null,
+        faces: (card.card_faces ?? [card]).map((face) => ({
+            name: face.name,
+            manaCost: face.mana_cost ?? '',
+            type: face.type_line ?? card.type_line,
+            text: face.oracle_text ?? '',
+            flavor: face.flavor_text ?? '',
+            power: face.power,
+            toughness: face.toughness,
+            loyalty: face.loyalty
+        })),
+        rarity: card.rarity,
+        setCode: card.set,
+        collectorNumber: card.collector_number,
+        artist: card.artist,
+        releasedAt: card.released_at,
+        prices: card.prices ?? {}
+    };
+}
+
+async function fetchCardsByIds(ids) {
+    const cards = [];
+    for (let i = 0; i < ids.length; i += 75) {
+        const response = await fetch('https://api.scryfall.com/cards/collection', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ identifiers: ids.slice(i, i + 75).map((id) => ({ id })) })
+        });
+        if (!response.ok) {
+            throw new Error(`Card lookup failed (${response.status})`);
+        }
+        cards.push(...(await response.json()).data.map(mapCard));
+    }
+    return cards;
 }
 
 function renderAuthPage({ path, title, submitText, endpoint, footerText, linkText, onLinkClick }) {
@@ -212,8 +230,16 @@ function renderSearch() {
     container.className = 'HasBottomNav';
 
     const topBar = container.appendChild(createElement('div', { class: 'TopBar' }));
-    const form = topBar.appendChild(createElement('form'));
+    const results = createElement('div', { class: 'CardResults' });
+    topBar.appendChild(createSearchForm(results));
     renderSettingsButton(topBar);
+    container.appendChild(results);
+
+    renderBottomNav('search');
+}
+
+function createSearchForm(results, onAdd) {
+    const form = createElement('form');
     const searchWrapper = form.appendChild(createElement('div'));
     searchWrapper.appendChild(createElement('input', {
         type: 'text',
@@ -221,7 +247,6 @@ function renderSearch() {
         name: 'SearchBar',
         placeholder: 'Search for a card...'
     }));
-    const results = container.appendChild(createElement('div', { class: 'CardResults' }));
     let searchTimer;
     let latestQuery = '';
     const runSearch = async () => {
@@ -231,7 +256,7 @@ function renderSearch() {
             results.replaceChildren();
             return;
         }
-        await renderCardResults(results, query, () => query === latestQuery);
+        await renderCardResults(results, query, () => query === latestQuery, onAdd);
     };
     form.elements['SearchBar'].addEventListener('input', () => {
         clearTimeout(searchTimer);
@@ -242,11 +267,10 @@ function renderSearch() {
         clearTimeout(searchTimer);
         runSearch();
     });
-
-    renderBottomNav('search');
+    return form;
 }
 
-async function renderCardResults(results, query, isCurrent) {
+async function renderCardResults(results, query, isCurrent, onAdd) {
     results.replaceChildren(createElement('p', {}, 'Searching...'));
 
     let cards;
@@ -274,8 +298,44 @@ async function renderCardResults(results, query, isCurrent) {
             item.appendChild(createElement('img', { src: card.image, alt: card.name }));
         }
         item.addEventListener('click', () => showCardPopup(card));
-        return item;
+        if (!onAdd) {
+            return item;
+        }
+
+        const wrapper = createElement('div', { class: 'CardResultWrapper' });
+        wrapper.appendChild(item);
+        const add = wrapper.appendChild(createButton('+', async () => {
+            add.disabled = true;
+            if (await onAdd(card)) {
+                add.textContent = '✓';
+            } else {
+                add.disabled = false;
+            }
+        }, 'AddCardButton'));
+        add.setAttribute('aria-label', `Add ${card.name} to deck`);
+        return wrapper;
     }));
+}
+
+function showAddCardsPopup(onAdd) {
+    const dialog = document.body.appendChild(createElement('dialog', { class: 'SearchPopup' }));
+    dialog.addEventListener('close', () => dialog.remove());
+    dialog.addEventListener('click', (event) => {
+        if (event.target === dialog) {
+            dialog.close();
+        }
+    });
+
+    const closeButton = createButton('×', () => dialog.close(), 'CardPopupClose');
+    closeButton.setAttribute('aria-label', 'Close');
+    dialog.appendChild(closeButton);
+
+    const results = createElement('div', { class: 'CardResults' });
+    const form = dialog.appendChild(createSearchForm(results, onAdd));
+    dialog.appendChild(results);
+
+    dialog.showModal();
+    form.elements['SearchBar'].focus();
 }
 
 function showCardPopup(card) {
@@ -383,7 +443,29 @@ function saveDeckView(view) {
     document.cookie = `${DECK_VIEW_COOKIE}=${view}; Path=/; Max-Age=31536000; SameSite=Lax`;
 }
 
-function renderDeck(ID, view = readDeckView()) {
+function createDeckCard(card) {
+    const item = createElement('button', { type: 'button', class: 'DeckCard' });
+    if (card.image) {
+        item.appendChild(createElement('img', { src: card.image, alt: card.name }));
+    }
+    item.appendChild(createElement('span', { class: 'DeckCardName' }, card.name));
+    item.addEventListener('click', () => showCardPopup(card));
+    return item;
+}
+
+async function addCardToDeck(deckKey, cardId) {
+    const response = await fetch(`/api/decks/${encodeURIComponent(deckKey)}/cards`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cardId })
+    });
+    if (response.status === 401) {
+        renderLogin();
+    }
+    return response.ok;
+}
+
+async function renderDeck(ID, view = readDeckView()) {
     wipeHTML(`/decks/${encodeURIComponent(ID)}`);
 
     const toolbar = container.appendChild(createElement('div', { class: 'DeckToolbar' }));
@@ -401,6 +483,41 @@ function renderDeck(ID, view = readDeckView()) {
         button.setAttribute('aria-label', label);
         button.title = label;
         button.innerHTML = `<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true">${VIEW_ICONS[name]}</svg>`;
+    }
+
+    const addButton = container.appendChild(createButton('+', () => {
+        showAddCardsPopup(async (card) => {
+            if (!await addCardToDeck(ID, card.id)) {
+                return false;
+            }
+            if (!cards.querySelector(`[data-card-id="${card.id}"]`)) {
+                const item = cards.appendChild(createDeckCard(card));
+                item.dataset.cardId = card.id;
+            }
+            return true;
+        });
+    }, 'AddToDeckButton'));
+    addButton.setAttribute('aria-label', 'Add cards');
+    addButton.title = 'Add cards';
+
+    const response = await fetch(`/api/decks/${encodeURIComponent(ID)}/cards`);
+    if (response.status === 401) {
+        return renderLogin();
+    }
+    if (!response.ok) {
+        return;
+    }
+    try {
+        const { cards: ids } = await response.json();
+        for (const card of await fetchCardsByIds(ids)) {
+            if (!cards.querySelector(`[data-card-id="${card.id}"]`)) {
+                const item = cards.appendChild(createDeckCard(card));
+                item.dataset.cardId = card.id;
+            }
+        }
+    } catch (error) {
+        console.error(error);
+        cards.appendChild(createElement('p', { class: 'FormError' }, 'Could not load cards'));
     }
 }
 

@@ -63,6 +63,7 @@ const SELECT_USER_DECKS = 'SELECT deck_key, name FROM decks WHERE username = ?';
 const INSERT_DECK = 'INSERT INTO decks (deck_key, username) VALUES (?, ?)';
 const SELECT_OWNED_DECK = 'SELECT deck_key FROM decks WHERE deck_key = ? AND username = ?';
 const SELECT_DECK_CARDS = 'SELECT card_id FROM deck_cards WHERE deck_key = ?';
+const INSERT_DECK_CARD = 'INSERT IGNORE INTO deck_cards (deck_key, card_id) VALUES (?, ?)';
 const CREATE_USER_SETTINGS_TABLE = 'CREATE TABLE IF NOT EXISTS user_settings (username VARCHAR(64) PRIMARY KEY, currency VARCHAR(3) NOT NULL DEFAULT \'USD\', FOREIGN KEY (username) REFERENCES users(username) ON DELETE CASCADE)';
 
 async function initDatabase() {
@@ -213,6 +214,23 @@ app.get('/api/decks/:deckKey/cards', requireAuth, async (req, res) => {
         }
         const [rows] = await db.query(SELECT_DECK_CARDS, [req.params.deckKey]);
         res.json({ ok: true, cards: rows.map((row) => row.card_id) });
+    } catch (error) {
+        serverError(res, error);
+    }
+});
+
+app.post('/api/decks/:deckKey/cards', requireAuth, async (req, res) => {
+    const { cardId } = req.body ?? {};
+    if (typeof cardId !== 'string' || !cardId || cardId.length > 64) {
+        return res.status(400).json({ error: 'Card id is required' });
+    }
+    try {
+        const [decks] = await db.query(SELECT_OWNED_DECK, [req.params.deckKey, req.username]);
+        if (!decks[0]) {
+            return res.status(404).json({ error: 'Deck not found' });
+        }
+        await db.query(INSERT_DECK_CARD, [req.params.deckKey, cardId]);
+        res.status(201).json({ ok: true });
     } catch (error) {
         serverError(res, error);
     }

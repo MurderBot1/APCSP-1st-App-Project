@@ -196,6 +196,74 @@
     margin: 4px 0 0;
 }
 
+.CardResultWrapper {
+    position: relative;
+}
+
+.AddCardButton,
+.AddToDeckButton {
+    border: 2px solid var(--outline);
+    background: var(--surface);
+    color: inherit;
+    font: inherit;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.AddCardButton {
+    position: absolute;
+    right: 6px;
+    bottom: 6px;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    font-size: 1.3rem;
+}
+
+.AddToDeckButton {
+    position: fixed;
+    bottom: 16px;
+    right: 16px;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    font-size: 2rem;
+}
+
+.SearchPopup {
+    width: min(860px, 94vw);
+    height: 80vh;
+    padding: 24px;
+    border: 2px solid var(--outline);
+    border-radius: 12px;
+    background: var(--surface);
+    color: inherit;
+}
+
+.SearchPopup .CardResults {
+    margin-bottom: 0;
+}
+
+.DeckCard {
+    padding: 0;
+    border: none;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.DeckCard img {
+    width: 146px;
+    border-radius: 6px;
+}
+
+.cardsView .DeckCardName,
+.listView .DeckCard img {
+    display: none;
+}
+
 .CardPopup {
     width: min(860px, 94vw);
     max-height: 90vh;
