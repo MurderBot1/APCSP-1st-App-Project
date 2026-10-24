@@ -48,6 +48,13 @@ const CREATE_DECK_CARDS_TABLE = `
         FOREIGN KEY (deck_key) REFERENCES decks(deck_key) ON DELETE CASCADE
     )
 `;
+const CREATE_USER_SETTINGS_TABLE = `
+    CREATE TABLE IF NOT EXISTS user_settings (
+        username VARCHAR(64) PRIMARY KEY,
+        currency VARCHAR(3) NOT NULL DEFAULT 'USD',
+        FOREIGN KEY (username) REFERENCES users(username) ON DELETE CASCADE
+    )
+`;
 const SELECT_DECKS_NAME_COLUMN = `
     SELECT 1 FROM information_schema.columns
     WHERE table_schema = DATABASE() AND table_name = 'decks' AND column_name = 'name'
@@ -65,14 +72,14 @@ const SELECT_OWNED_DECK = 'SELECT deck_key FROM decks WHERE deck_key = ? AND use
 const SELECT_DECK_CARDS = 'SELECT card_id FROM deck_cards WHERE deck_key = ?';
 const UPDATE_DECK_NAME = 'UPDATE decks SET name = ? WHERE deck_key = ? AND username = ?';
 const INSERT_DECK_CARD = 'INSERT IGNORE INTO deck_cards (deck_key, card_id) VALUES (?, ?)';
-const CREATE_USER_SETTINGS_TABLE = 'CREATE TABLE IF NOT EXISTS user_settings (username VARCHAR(64) PRIMARY KEY, currency VARCHAR(3) NOT NULL DEFAULT \'USD\', FOREIGN KEY (username) REFERENCES users(username) ON DELETE CASCADE)';
+const SELECT_USER_CURRENCY = 'SELECT currency FROM user_settings WHERE username = ?';
+const UPSERT_USER_CURRENCY = 'INSERT INTO user_settings (username, currency) VALUES (?, ?) ON DUPLICATE KEY UPDATE currency = ?';
 
 async function initDatabase() {
     await db.query(CREATE_USERS_TABLE);
     await db.query(CREATE_SESSIONS_TABLE);
     await db.query(CREATE_DECKS_TABLE);
     await db.query(CREATE_USER_SETTINGS_TABLE);
-    // CREATE TABLE IF NOT EXISTS won't add the column to a table created before it existed
     const [nameColumn] = await db.query(SELECT_DECKS_NAME_COLUMN);
     if (!nameColumn.length) {
         await db.query(ADD_DECKS_NAME_COLUMN);
@@ -268,7 +275,7 @@ app.post('/api/logout', async (req, res) => {
 
 app.get('/api/user-settings', requireAuth, async (req, res) => {
     try {
-        const [rows] = await db.query('SELECT currency FROM user_settings WHERE username = ?', [req.username]);
+        const [rows] = await db.query(SELECT_USER_CURRENCY, [req.username]);
         res.json({ ok: true, currency: rows[0]?.currency || 'USD' });
     } catch (error) {
         serverError(res, error);
@@ -282,14 +289,13 @@ app.post('/api/user-settings', requireAuth, async (req, res) => {
     }
 
     try {
-        await db.query('INSERT INTO user_settings (username, currency) VALUES (?, ?) ON DUPLICATE KEY UPDATE currency = ?', [req.username, currency, currency]);
+        await db.query(UPSERT_USER_CURRENCY, [req.username, currency, currency]);
         res.json({ ok: true, currency });
     } catch (error) {
         serverError(res, error);
     }
 });
 
-// Client-side routes: serve the app for each page so refreshing or opening a link works
 app.get(['/login', '/signup', '/search', '/decks', '/decks/:deckKey', '/settings'], (req, res) => {
     res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
 });

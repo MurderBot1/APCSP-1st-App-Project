@@ -27,6 +27,14 @@ function createElement(tag, attributes = {}, text = '') {
     return element;
 }
 
+function sendJSON(url, method, body) {
+    return fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+    });
+}
+
 function createField(labelText, type, id, name, placeholder) {
     const fragment = document.createDocumentFragment();
     fragment.appendChild(createElement('label', { for: id }, labelText));
@@ -84,13 +92,9 @@ function createDropdown(options, onChange) {
 }
 
 async function submitCredentials(endpoint, form) {
-    const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            username: form.elements['Username'].value,
-            password: form.elements['Password'].value
-        })
+    const response = await sendJSON(endpoint, 'POST', {
+        username: form.elements['Username'].value,
+        password: form.elements['Password'].value
     });
     const data = await response.json();
 
@@ -148,14 +152,16 @@ function mapCard(card) {
     };
 }
 
+const SCRYFALL_BATCH_SIZE = 75;
+
 async function fetchCardsByIds(ids) {
     const cards = [];
-    for (let i = 0; i < ids.length; i += 75) {
-        const response = await fetch('https://api.scryfall.com/cards/collection', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ identifiers: ids.slice(i, i + 75).map((id) => ({ id })) })
-        });
+    for (let i = 0; i < ids.length; i += SCRYFALL_BATCH_SIZE) {
+        if (i > 0) {
+            await new Promise((resolve) => setTimeout(resolve, 500));
+        }
+        const identifiers = ids.slice(i, i + SCRYFALL_BATCH_SIZE).map((id) => ({ id }));
+        const response = await sendJSON('https://api.scryfall.com/cards/collection', 'POST', { identifiers });
         if (!response.ok) {
             throw new Error(`Card lookup failed (${response.status})`);
         }
@@ -218,9 +224,11 @@ function renderBottomNav(active) {
     current.setAttribute('aria-current', 'page');
 }
 
+const SETTINGS_ICON = '<svg viewBox="0 0 24 24" width="28" height="28" fill="currentColor" aria-hidden="true"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.488.488 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>';
+
 function renderSettingsButton(parent = container) {
     const button = parent.appendChild(createButton('', renderSettings, 'SettingsButton'));
-    button.innerHTML = '<svg viewBox="0 0 24 24" width="28" height="28" fill="currentColor" aria-hidden="true"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.488.488 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>';
+    button.innerHTML = SETTINGS_ICON;
     button.setAttribute('aria-label', 'Settings');
     button.title = 'Settings';
 }
@@ -270,6 +278,30 @@ function createSearchForm(results, onAdd) {
     return form;
 }
 
+function createCardResult(card, onAdd) {
+    const item = createElement('button', { type: 'button', class: 'CardResult' });
+    if (card.image) {
+        item.appendChild(createElement('img', { src: card.image, alt: card.name }));
+    }
+    item.addEventListener('click', () => showCardPopup(card));
+    if (!onAdd) {
+        return item;
+    }
+
+    const wrapper = createElement('div', { class: 'CardResultWrapper' });
+    wrapper.appendChild(item);
+    const add = wrapper.appendChild(createButton('+', async () => {
+        add.disabled = true;
+        if (await onAdd(card)) {
+            add.textContent = '✓';
+        } else {
+            add.disabled = false;
+        }
+    }, 'AddCardButton'));
+    add.setAttribute('aria-label', `Add ${card.name} to deck`);
+    return wrapper;
+}
+
 async function renderCardResults(results, query, isCurrent, onAdd) {
     results.replaceChildren(createElement('p', {}, 'Searching...'));
 
@@ -292,33 +324,11 @@ async function renderCardResults(results, query, isCurrent, onAdd) {
         results.replaceChildren(createElement('p', {}, 'No cards found'));
         return;
     }
-    results.replaceChildren(...cards.map((card) => {
-        const item = createElement('button', { type: 'button', class: 'CardResult' });
-        if (card.image) {
-            item.appendChild(createElement('img', { src: card.image, alt: card.name }));
-        }
-        item.addEventListener('click', () => showCardPopup(card));
-        if (!onAdd) {
-            return item;
-        }
-
-        const wrapper = createElement('div', { class: 'CardResultWrapper' });
-        wrapper.appendChild(item);
-        const add = wrapper.appendChild(createButton('+', async () => {
-            add.disabled = true;
-            if (await onAdd(card)) {
-                add.textContent = '✓';
-            } else {
-                add.disabled = false;
-            }
-        }, 'AddCardButton'));
-        add.setAttribute('aria-label', `Add ${card.name} to deck`);
-        return wrapper;
-    }));
+    results.replaceChildren(...cards.map((card) => createCardResult(card, onAdd)));
 }
 
-function showAddCardsPopup(onAdd) {
-    const dialog = document.body.appendChild(createElement('dialog', { class: 'SearchPopup' }));
+function createDialog(className) {
+    const dialog = document.body.appendChild(createElement('dialog', { class: className }));
     dialog.addEventListener('close', () => dialog.remove());
     dialog.addEventListener('click', (event) => {
         if (event.target === dialog) {
@@ -329,6 +339,11 @@ function showAddCardsPopup(onAdd) {
     const closeButton = createButton('×', () => dialog.close(), 'CardPopupClose');
     closeButton.setAttribute('aria-label', 'Close');
     dialog.appendChild(closeButton);
+    return dialog;
+}
+
+function showAddCardsPopup(onAdd) {
+    const dialog = createDialog('SearchPopup');
 
     const results = createElement('div', { class: 'CardResults' });
     const form = dialog.appendChild(createSearchForm(results, onAdd));
@@ -339,17 +354,7 @@ function showAddCardsPopup(onAdd) {
 }
 
 function showCardPopup(card) {
-    const dialog = document.body.appendChild(createElement('dialog', { class: 'CardPopup' }));
-    dialog.addEventListener('close', () => dialog.remove());
-    dialog.addEventListener('click', (event) => {
-        if (event.target === dialog) {
-            dialog.close();
-        }
-    });
-
-    const closeButton = createButton('×', () => dialog.close(), 'CardPopupClose');
-    closeButton.setAttribute('aria-label', 'Close');
-    dialog.appendChild(closeButton);
+    const dialog = createDialog('CardPopup');
 
     const image = dialog.appendChild(createElement('div', { class: 'CardPopupImage' }));
     if (card.largeImage) {
@@ -438,11 +443,7 @@ function renameDeck(deck, box) {
         done = true;
         const name = input.value.trim();
         if (save && name && name !== deck.name) {
-            const response = await fetch(`/api/decks/${encodeURIComponent(deck.key)}`, {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name })
-            });
+            const response = await sendJSON(`/api/decks/${encodeURIComponent(deck.key)}`, 'PATCH', { name });
             if (response.status === 401) {
                 return renderLogin();
             }
@@ -497,12 +498,16 @@ function createDeckCard(card) {
     return item;
 }
 
+function appendDeckCard(cards, card) {
+    if (cards.querySelector(`[data-card-id="${card.id}"]`)) {
+        return;
+    }
+    const item = cards.appendChild(createDeckCard(card));
+    item.dataset.cardId = card.id;
+}
+
 async function addCardToDeck(deckKey, cardId) {
-    const response = await fetch(`/api/decks/${encodeURIComponent(deckKey)}/cards`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cardId })
-    });
+    const response = await sendJSON(`/api/decks/${encodeURIComponent(deckKey)}/cards`, 'POST', { cardId });
     if (response.status === 401) {
         renderLogin();
     }
@@ -534,10 +539,7 @@ async function renderDeck(ID, view = readDeckView()) {
             if (!await addCardToDeck(ID, card.id)) {
                 return false;
             }
-            if (!cards.querySelector(`[data-card-id="${card.id}"]`)) {
-                const item = cards.appendChild(createDeckCard(card));
-                item.dataset.cardId = card.id;
-            }
+            appendDeckCard(cards, card);
             return true;
         });
     }, 'AddToDeckButton'));
@@ -554,10 +556,7 @@ async function renderDeck(ID, view = readDeckView()) {
     try {
         const { cards: ids } = await response.json();
         for (const card of await fetchCardsByIds(ids)) {
-            if (!cards.querySelector(`[data-card-id="${card.id}"]`)) {
-                const item = cards.appendChild(createDeckCard(card));
-                item.dataset.cardId = card.id;
-            }
+            appendDeckCard(cards, card);
         }
     } catch (error) {
         console.error(error);
@@ -566,15 +565,12 @@ async function renderDeck(ID, view = readDeckView()) {
 }
 
 async function getUsdToEurRate() {
-    const url = 'https://api.frankfurter.dev/v2/rate/usd/eur';
-
     try {
-        const response = await fetch(url);
-        if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
-
-        const data = await response.json();
-        console.log(`1 ${data.base} = ${data.rate} ${data.quote} (Date: ${data.date})`);
-        return data.rate;
+        const response = await fetch('https://api.frankfurter.dev/v2/rate/usd/eur');
+        if (!response.ok) {
+            throw new Error(`Rate lookup failed (${response.status})`);
+        }
+        return (await response.json()).rate;
     } catch (error) {
         console.error('Failed to fetch rate:', error);
     }
@@ -605,22 +601,21 @@ function formatPrice(usd) {
     return currency === 'EUR' ? `€${(usd * usdToEurRate).toFixed(2)}` : `$${usd}`;
 }
 
+const CURRENCY_OPTIONS = [
+    { value: 'USD', text: 'US Dollar' },
+    { value: 'EUR', text: 'Euro' }
+];
+
 function renderSettings() {
     wipeHTML('/settings');
 
     container.appendChild(createElement('h1', {}, 'Settings'));
     container.appendChild(createButton('Log Out', logOut));
     container.appendChild(createButton('Back', renderSearch));
-    const dropdown = container.appendChild(createDropdown([{ value: "USD", text: "US Dollar" }, { value: "EUR", text: "Euro" }], async (value) => {
-       await setCurrency(value);
-       fetch('/api/user-settings', {
-           method: 'POST',
-           headers: {
-               'Content-Type': 'application/json'
-           },
-           body: JSON.stringify({ currency: value })
-       });
-   }));
+    const dropdown = container.appendChild(createDropdown(CURRENCY_OPTIONS, async (value) => {
+        await setCurrency(value);
+        sendJSON('/api/user-settings', 'POST', { currency: value });
+    }));
     dropdown.value = currency;
 }
 
