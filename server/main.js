@@ -63,6 +63,7 @@ const SELECT_USER_DECKS = 'SELECT deck_key, name FROM decks WHERE username = ?';
 const INSERT_DECK = 'INSERT INTO decks (deck_key, username) VALUES (?, ?)';
 const SELECT_OWNED_DECK = 'SELECT deck_key FROM decks WHERE deck_key = ? AND username = ?';
 const SELECT_DECK_CARDS = 'SELECT card_id FROM deck_cards WHERE deck_key = ?';
+const UPDATE_DECK_NAME = 'UPDATE decks SET name = ? WHERE deck_key = ? AND username = ?';
 const INSERT_DECK_CARD = 'INSERT IGNORE INTO deck_cards (deck_key, card_id) VALUES (?, ?)';
 const CREATE_USER_SETTINGS_TABLE = 'CREATE TABLE IF NOT EXISTS user_settings (username VARCHAR(64) PRIMARY KEY, currency VARCHAR(3) NOT NULL DEFAULT \'USD\', FOREIGN KEY (username) REFERENCES users(username) ON DELETE CASCADE)';
 
@@ -201,6 +202,22 @@ app.post('/api/decks', requireAuth, async (req, res) => {
     try {
         await db.query(INSERT_DECK, [key, req.username]);
         res.status(201).json({ ok: true, deck: { key, name: 'Untitled deck' } });
+    } catch (error) {
+        serverError(res, error);
+    }
+});
+
+app.patch('/api/decks/:deckKey', requireAuth, async (req, res) => {
+    const name = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
+    if (!name || name.length > 100) {
+        return res.status(400).json({ error: 'Deck name must be 1-100 characters' });
+    }
+    try {
+        const [result] = await db.query(UPDATE_DECK_NAME, [name, req.params.deckKey, req.username]);
+        if (!result.affectedRows) {
+            return res.status(404).json({ error: 'Deck not found' });
+        }
+        res.json({ ok: true, name });
     } catch (error) {
         serverError(res, error);
     }

@@ -412,11 +412,55 @@ async function renderDecks() {
         list.appendChild(createElement('p', {}, 'No decks yet'));
     }
     for (const deck of decks) {
-        list.appendChild(createButton(deck.name, () => renderDeck(deck.key), 'DeckBox'));
+        const box = list.appendChild(createButton(deck.name, () => renderDeck(deck.key), 'DeckBox'));
+        box.addEventListener('contextmenu', (event) => {
+            event.preventDefault();
+            renameDeck(deck, box);
+        });
     }
 
     container.appendChild(createButton('+ Create Deck', createDeck, 'CreateDeckButton'));
     renderBottomNav('decks');
+}
+
+function renameDeck(deck, box) {
+    const input = createElement('input', { type: 'text', class: 'DeckNameInput', maxlength: '100' });
+    input.value = deck.name;
+    box.replaceWith(input);
+    input.focus();
+    input.select();
+
+    let done = false;
+    const finish = async (save) => {
+        if (done) {
+            return;
+        }
+        done = true;
+        const name = input.value.trim();
+        if (save && name && name !== deck.name) {
+            const response = await fetch(`/api/decks/${encodeURIComponent(deck.key)}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name })
+            });
+            if (response.status === 401) {
+                return renderLogin();
+            }
+            if (response.ok) {
+                deck.name = name;
+            }
+        }
+        box.textContent = deck.name;
+        input.replaceWith(box);
+    };
+    input.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+            finish(true);
+        } else if (event.key === 'Escape') {
+            finish(false);
+        }
+    });
+    input.addEventListener('blur', () => finish(true));
 }
 
 async function createDeck() {

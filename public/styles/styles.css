@@ -379,6 +379,17 @@
     cursor: pointer;
 }
 
+.DeckNameInput {
+    min-width: 140px;
+    padding: 24px 16px;
+    border: 2px solid var(--outline);
+    border-radius: 8px;
+    background: var(--surface);
+    color: inherit;
+    font: inherit;
+    text-align: center;
+}
+
 .DeckBox:hover {
     background: var(--tint-weak);
 }
