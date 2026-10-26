@@ -44,14 +44,27 @@ const CREATE_DECK_CARDS_TABLE = `
     CREATE TABLE IF NOT EXISTS deck_cards (
         deck_key CHAR(64) NOT NULL,
         card_id VARCHAR(64) NOT NULL,
+        quantity INT UNSIGNED NOT NULL DEFAULT 1,
         PRIMARY KEY (deck_key, card_id),
         FOREIGN KEY (deck_key) REFERENCES decks(deck_key) ON DELETE CASCADE
+    )
+`;
+const CREATE_USER_SETTINGS_TABLE = `
+    CREATE TABLE IF NOT EXISTS user_settings (
+        username VARCHAR(64) PRIMARY KEY,
+        currency VARCHAR(3) NOT NULL DEFAULT 'USD',
+        FOREIGN KEY (username) REFERENCES users(username) ON DELETE CASCADE
     )
 `;
 const SELECT_DECKS_NAME_COLUMN = `
     SELECT 1 FROM information_schema.columns
     WHERE table_schema = DATABASE() AND table_name = 'decks' AND column_name = 'name'
 `;
+const SELECT_DECK_CARDS_QUANTITY_COLUMN = `
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = DATABASE() AND table_name = 'deck_cards' AND column_name = 'quantity'
+`;
+const ADD_DECK_CARDS_QUANTITY_COLUMN = 'ALTER TABLE deck_cards ADD COLUMN quantity INT UNSIGNED NOT NULL DEFAULT 1';
 const ADD_DECKS_NAME_COLUMN = "ALTER TABLE decks ADD COLUMN name VARCHAR(100) NOT NULL DEFAULT 'Untitled deck'";
 const DELETE_EXPIRED_SESSIONS = 'DELETE FROM sessions WHERE expires_at < NOW()';
 const INSERT_SESSION = 'INSERT INTO sessions (token_hash, username, expires_at) VALUES (?, ?, ?)';
@@ -62,21 +75,30 @@ const SELECT_USER_CREDENTIALS = 'SELECT salt, hash FROM users WHERE username = ?
 const SELECT_USER_DECKS = 'SELECT deck_key, name FROM decks WHERE username = ?';
 const INSERT_DECK = 'INSERT INTO decks (deck_key, username) VALUES (?, ?)';
 const SELECT_OWNED_DECK = 'SELECT deck_key FROM decks WHERE deck_key = ? AND username = ?';
-const SELECT_DECK_CARDS = 'SELECT card_id FROM deck_cards WHERE deck_key = ?';
-const INSERT_DECK_CARD = 'INSERT IGNORE INTO deck_cards (deck_key, card_id) VALUES (?, ?)';
-const CREATE_USER_SETTINGS_TABLE = 'CREATE TABLE IF NOT EXISTS user_settings (username VARCHAR(64) PRIMARY KEY, currency VARCHAR(3) NOT NULL DEFAULT \'USD\', FOREIGN KEY (username) REFERENCES users(username) ON DELETE CASCADE)';
+const SELECT_DECK_CARDS = 'SELECT card_id, quantity FROM deck_cards WHERE deck_key = ?';
+const SELECT_DECK_CARD_QUANTITY = 'SELECT quantity FROM deck_cards WHERE deck_key = ? AND card_id = ?';
+const DELETE_DECK = 'DELETE FROM decks WHERE deck_key = ? AND username = ?';
+const UPDATE_DECK_NAME = 'UPDATE decks SET name = ? WHERE deck_key = ? AND username = ?';
+const INSERT_DECK_CARD = 'INSERT INTO deck_cards (deck_key, card_id) VALUES (?, ?) ON DUPLICATE KEY UPDATE quantity = quantity + 1';
+const DECREMENT_DECK_CARD = 'UPDATE deck_cards SET quantity = quantity - 1 WHERE deck_key = ? AND card_id = ? AND quantity > 0';
+const DELETE_EMPTY_DECK_CARD = 'DELETE FROM deck_cards WHERE deck_key = ? AND card_id = ? AND quantity = 0';
+const SELECT_USER_CURRENCY = 'SELECT currency FROM user_settings WHERE username = ?';
+const UPSERT_USER_CURRENCY = 'INSERT INTO user_settings (username, currency) VALUES (?, ?) ON DUPLICATE KEY UPDATE currency = ?';
 
 async function initDatabase() {
     await db.query(CREATE_USERS_TABLE);
     await db.query(CREATE_SESSIONS_TABLE);
     await db.query(CREATE_DECKS_TABLE);
     await db.query(CREATE_USER_SETTINGS_TABLE);
-    // CREATE TABLE IF NOT EXISTS won't add the column to a table created before it existed
     const [nameColumn] = await db.query(SELECT_DECKS_NAME_COLUMN);
     if (!nameColumn.length) {
         await db.query(ADD_DECKS_NAME_COLUMN);
     }
     await db.query(CREATE_DECK_CARDS_TABLE);
+    const [quantityColumn] = await db.query(SELECT_DECK_CARDS_QUANTITY_COLUMN);
+    if (!quantityColumn.length) {
+        await db.query(ADD_DECK_CARDS_QUANTITY_COLUMN);
+    }
     await db.query(DELETE_EXPIRED_SESSIONS);
 }
 
@@ -206,6 +228,34 @@ app.post('/api/decks', requireAuth, async (req, res) => {
     }
 });
 
+app.patch('/api/decks/:deckKey', requireAuth, async (req, res) => {
+    const name = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
+    if (!name || name.length > 100) {
+        return res.status(400).json({ error: 'Deck name must be 1-100 characters' });
+    }
+    try {
+        const [result] = await db.query(UPDATE_DECK_NAME, [name, req.params.deckKey, req.username]);
+        if (!result.affectedRows) {
+            return res.status(404).json({ error: 'Deck not found' });
+        }
+        res.json({ ok: true, name });
+    } catch (error) {
+        serverError(res, error);
+    }
+});
+
+app.delete('/api/decks/:deckKey', requireAuth, async (req, res) => {
+    try {
+        const [result] = await db.query(DELETE_DECK, [req.params.deckKey, req.username]);
+        if (!result.affectedRows) {
+            return res.status(404).json({ error: 'Deck not found' });
+        }
+        res.json({ ok: true });
+    } catch (error) {
+        serverError(res, error);
+    }
+});
+
 app.get('/api/decks/:deckKey/cards', requireAuth, async (req, res) => {
     try {
         const [decks] = await db.query(SELECT_OWNED_DECK, [req.params.deckKey, req.username]);
@@ -213,7 +263,7 @@ app.get('/api/decks/:deckKey/cards', requireAuth, async (req, res) => {
             return res.status(404).json({ error: 'Deck not found' });
         }
         const [rows] = await db.query(SELECT_DECK_CARDS, [req.params.deckKey]);
-        res.json({ ok: true, cards: rows.map((row) => row.card_id) });
+        res.json({ ok: true, cards: rows.map((row) => ({ id: row.card_id, quantity: row.quantity })) });
     } catch (error) {
         serverError(res, error);
     }
@@ -230,7 +280,24 @@ app.post('/api/decks/:deckKey/cards', requireAuth, async (req, res) => {
             return res.status(404).json({ error: 'Deck not found' });
         }
         await db.query(INSERT_DECK_CARD, [req.params.deckKey, cardId]);
-        res.status(201).json({ ok: true });
+        const [rows] = await db.query(SELECT_DECK_CARD_QUANTITY, [req.params.deckKey, cardId]);
+        res.status(201).json({ ok: true, quantity: rows[0].quantity });
+    } catch (error) {
+        serverError(res, error);
+    }
+});
+
+app.delete('/api/decks/:deckKey/cards/:cardId', requireAuth, async (req, res) => {
+    const { deckKey, cardId } = req.params;
+    try {
+        const [decks] = await db.query(SELECT_OWNED_DECK, [deckKey, req.username]);
+        if (!decks[0]) {
+            return res.status(404).json({ error: 'Deck not found' });
+        }
+        await db.query(DECREMENT_DECK_CARD, [deckKey, cardId]);
+        await db.query(DELETE_EMPTY_DECK_CARD, [deckKey, cardId]);
+        const [rows] = await db.query(SELECT_DECK_CARD_QUANTITY, [deckKey, cardId]);
+        res.json({ ok: true, quantity: rows[0]?.quantity ?? 0 });
     } catch (error) {
         serverError(res, error);
     }
@@ -251,7 +318,7 @@ app.post('/api/logout', async (req, res) => {
 
 app.get('/api/user-settings', requireAuth, async (req, res) => {
     try {
-        const [rows] = await db.query('SELECT currency FROM user_settings WHERE username = ?', [req.username]);
+        const [rows] = await db.query(SELECT_USER_CURRENCY, [req.username]);
         res.json({ ok: true, currency: rows[0]?.currency || 'USD' });
     } catch (error) {
         serverError(res, error);
@@ -265,14 +332,13 @@ app.post('/api/user-settings', requireAuth, async (req, res) => {
     }
 
     try {
-        await db.query('INSERT INTO user_settings (username, currency) VALUES (?, ?) ON DUPLICATE KEY UPDATE currency = ?', [req.username, currency, currency]);
+        await db.query(UPSERT_USER_CURRENCY, [req.username, currency, currency]);
         res.json({ ok: true, currency });
     } catch (error) {
         serverError(res, error);
     }
 });
 
-// Client-side routes: serve the app for each page so refreshing or opening a link works
 app.get(['/login', '/signup', '/search', '/decks', '/decks/:deckKey', '/settings'], (req, res) => {
     res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
 });

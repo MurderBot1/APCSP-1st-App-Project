@@ -1,16 +1,73 @@
 :root {
-    --surface: Canvas;
-    --outline: currentColor;
+    color-scheme: dark;
+    --surface: rgb(44, 39, 39);
+    --outline: grey;
     --tint: rgba(128, 128, 128, 0.25);
     --tint-weak: rgba(128, 128, 128, 0.15);
     --divider: rgba(128, 128, 128, 0.5);
     --backdrop: rgba(0, 0, 0, 0.6);
     --accent: rgb(60, 255, 0);
     --link: rgb(143, 211, 186);
-    --auth-bg: rgb(44, 39, 39);
-    --auth-border: grey;
     --auth-input-bg: rgb(5, 5, 5);
     --auth-input-border: rgb(70, 60, 60);
+}
+
+body {
+    background-color: var(--surface);
+    color: var(--accent);
+    font-family: system-ui, sans-serif;
+}
+
+button,
+select {
+    padding: 6px 12px;
+    border: 2px solid var(--outline);
+    border-radius: 5px;
+    background-color: var(--surface);
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+}
+
+button:not([class]):hover,
+select:hover,
+.BackButton:hover,
+.CreateDeckButton:hover,
+.AddCardButton:hover,
+.AddToDeckButton:hover,
+.DeleteDeckButton:hover,
+.ConfirmDelete:hover {
+    background-color: var(--auth-input-bg);
+}
+
+input:focus,
+button:focus-visible,
+select:focus-visible {
+    outline: var(--accent) solid 2px;
+}
+
+a:link {
+    color: var(--link);
+    text-decoration: none;
+}
+
+.AuthPage,
+.SettingsPage {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    margin: 0;
+}
+
+.AuthPage {
+    text-align: center;
+}
+
+.AuthPage form {
+    width: 100%;
+    max-width: 320px;
 }
 
 .UserInput {
@@ -32,6 +89,13 @@
     padding-right: 34px;
 }
 
+.UserInput input {
+    border: 2px solid var(--outline);
+    padding: 2px 4px;
+    background-color: var(--surface);
+    border-radius: 5px;
+}
+
 .PasswordToggle {
     position: absolute;
     right: 6px;
@@ -39,8 +103,15 @@
     padding: 2px;
     background: none;
     border: none;
-    color: inherit;
-    cursor: pointer;
+}
+
+.AuthPage button[type="submit"] {
+    padding: 1px 6px;
+}
+
+.AuthPage button[type="submit"]:hover {
+    background-color: var(--auth-input-bg);
+    border-color: var(--auth-input-border);
 }
 
 .HasBottomNav {
@@ -56,14 +127,24 @@
 }
 
 .BottomNav button {
+    display: flex;
     flex: 1;
+    align-items: center;
+    justify-content: center;
     padding: 18px 0;
+    font-size: 1.5rem;
+    line-height: 1;
     border: none;
     border-top: 1px solid var(--divider);
-    background: var(--surface);
-    color: inherit;
-    font: inherit;
-    cursor: pointer;
+    border-radius: 0;
+}
+
+.DecksIcon {
+    width: 1.5rem;
+    height: 1.5rem;
+    background-color: currentColor;
+    -webkit-mask: url(/images/cards.png) center / contain no-repeat;
+    mask: url(/images/cards.png) center / contain no-repeat;
 }
 
 .BottomNav button + button {
@@ -75,22 +156,200 @@
     font-weight: bold;
 }
 
+.TopBar,
+.DeckToolbar {
+    display: flex;
+    gap: 12px;
+}
+
+.TopBar {
+    align-items: center;
+}
+
+.TopBar form {
+    flex: 1;
+    min-width: 0;
+}
+
+.TopBar .CardPopupClose {
+    position: static;
+    flex-shrink: 0;
+}
+
+.TopBar .SettingsButton {
+    float: none;
+    flex-shrink: 0;
+    margin-bottom: 0;
+}
+
+.SettingsButton {
+    float: right;
+    margin-bottom: 12px;
+    font-size: 1.5rem;
+    line-height: 1;
+}
+
 #SearchBar {
     padding: 8px 12px;
-    border: none;
+    border: 2px solid var(--outline);
     border-radius: 5px;
-    background: var(--tint);
+    background: var(--auth-input-bg);
     color: inherit;
     font: inherit;
     width: 100%;
+    box-sizing: border-box;
 }
 
-.DeckToolbar {
-    position: fixed;
-    top: 16px;
-    left: 16px;
+.CardResults,
+.DeckList,
+.DeckCards.cardsView {
     display: flex;
+    flex-wrap: wrap;
     gap: 12px;
+}
+
+.CardResults {
+    margin: 16px 0;
+}
+
+.CardResult,
+.DeckCard {
+    padding: 0;
+    border: none;
+    background: none;
+}
+
+.CardResult {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 146px;
+}
+
+.CardResult img,
+.DeckCard img {
+    width: 146px;
+    border-radius: 6px;
+}
+
+.CardResult p {
+    margin: 4px 0 0;
+}
+
+.CardResultWrapper {
+    position: relative;
+}
+
+.AddedCount {
+    position: absolute;
+    font-weight: bold;
+    left: 6px;
+    bottom: 6px;
+    padding: 2px 6px;
+    border-radius: 10px;
+    background: var(--surface);
+}
+
+.AddedCount:empty {
+    display: none;
+}
+
+.AddCardButton,
+.AddToDeckButton {
+    border-radius: 50%;
+    line-height: 1;
+}
+
+.AddCardButton {
+    position: absolute;
+    right: 6px;
+    bottom: 6px;
+    width: 32px;
+    height: 32px;
+    font-size: 1.3rem;
+}
+
+.SearchPopup,
+.ConfirmPopup,
+.CardPopup {
+    width: min(860px, 94vw);
+    padding: 24px;
+    border: 2px solid var(--outline);
+    border-radius: 12px;
+    background: var(--surface);
+    color: inherit;
+}
+
+.SearchPopup {
+    height: 80vh;
+}
+
+.ConfirmPopup {
+    width: min(360px, 94vw);
+    text-align: center;
+}
+
+.ConfirmActions {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+}
+
+.ConfirmDelete {
+    color: rgb(255, 90, 90);
+    border-color: rgb(255, 90, 90);
+}
+
+.SearchPopup .CardResults {
+    margin-bottom: 0;
+}
+
+.DeckList {
+    margin-bottom: 16px;
+}
+
+.CreateDeckButton {
+    position: fixed;
+    bottom: 72px;
+    right: 16px;
+    padding: 10px 16px;
+    border-radius: 8px;
+}
+
+.DeckBox,
+.DeckNameInput {
+    min-width: 140px;
+    padding: 24px 16px;
+    border: 2px solid var(--outline);
+    border-radius: 8px;
+    color: inherit;
+    font: inherit;
+}
+
+.DeckBox {
+    background: none;
+}
+
+.DeckBox:hover {
+    background: var(--tint-weak);
+}
+
+.DeckNameInput {
+    box-sizing: border-box;
+    background: var(--auth-input-bg);
+    text-align: center;
+}
+
+.BackButton {
+    padding: 8px 14px;
+    border-radius: 8px;
+}
+
+.DeleteDeckButton {
+    display: flex;
+    align-items: center;
+    padding: 8px 10px;
+    border-radius: 8px;
 }
 
 .ViewToggle {
@@ -105,9 +364,6 @@
     align-items: center;
     padding: 8px 10px;
     border: none;
-    background: var(--surface);
-    color: inherit;
-    cursor: pointer;
 }
 
 .ViewToggle button + button {
@@ -122,102 +378,50 @@
     padding-top: 64px;
 }
 
-.DeckCards.cardsView {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 12px;
-}
-
 .DeckCards.listView {
     display: flex;
     flex-direction: column;
     gap: 8px;
 }
 
-.BackButton {
-    padding: 8px 14px;
-    border: 2px solid var(--outline);
-    border-radius: 8px;
-    background: var(--surface);
-    color: inherit;
-    font: inherit;
-    cursor: pointer;
+.DeckCard {
+    text-align: left;
 }
 
-.TopBar {
+.DeckCardWrapper {
     display: flex;
-    align-items: center;
-    gap: 12px;
+    gap: 6px;
 }
 
-.TopBar form {
-    flex: 1;
-}
-
-.TopBar .SettingsButton {
-    float: none;
-    margin-bottom: 0;
-}
-
-.SettingsButton {
-    float: right;
-    margin-bottom: 12px;
-    font-size: 1.5rem;
-    line-height: 1;
-}
-
-.CardResults {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 12px;
-    margin: 16px 0;
-}
-
-.CardResult {
-    display: flex;
+.cardsView .DeckCardWrapper {
     flex-direction: column;
+}
+
+.listView .DeckCardWrapper {
     align-items: center;
-    width: 146px;
-    padding: 0;
-    border: none;
-    background: none;
-    color: inherit;
-    font: inherit;
+    gap: 16px;
+}
+
+.DeckCardControls {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+}
+
+.DeckCardStep {
+    padding: 2px 10px;
+}
+
+.DeckCardCount {
+    min-width: 2ch;
+    font-weight: bold;
     text-align: center;
-    cursor: pointer;
 }
 
-.CardResult img {
-    width: 146px;
-    border-radius: 6px;
-}
-
-.CardResult p {
-    margin: 4px 0 0;
-}
-
-.CardResultWrapper {
-    position: relative;
-}
-
-.AddCardButton,
-.AddToDeckButton {
-    border: 2px solid var(--outline);
-    background: var(--surface);
-    color: inherit;
-    font: inherit;
-    line-height: 1;
-    cursor: pointer;
-}
-
-.AddCardButton {
-    position: absolute;
-    right: 6px;
-    bottom: 6px;
-    width: 32px;
-    height: 32px;
-    border-radius: 50%;
-    font-size: 1.3rem;
+.cardsView .DeckCardName,
+.listView .DeckCard img {
+    display: none;
 }
 
 .AddToDeckButton {
@@ -226,52 +430,11 @@
     right: 16px;
     width: 56px;
     height: 56px;
-    border-radius: 50%;
     font-size: 2rem;
 }
 
-.SearchPopup {
-    width: min(860px, 94vw);
-    height: 80vh;
-    padding: 24px;
-    border: 2px solid var(--outline);
-    border-radius: 12px;
-    background: var(--surface);
-    color: inherit;
-}
-
-.SearchPopup .CardResults {
-    margin-bottom: 0;
-}
-
-.DeckCard {
-    padding: 0;
-    border: none;
-    background: none;
-    color: inherit;
-    font: inherit;
-    text-align: left;
-    cursor: pointer;
-}
-
-.DeckCard img {
-    width: 146px;
-    border-radius: 6px;
-}
-
-.cardsView .DeckCardName,
-.listView .DeckCard img {
-    display: none;
-}
-
 .CardPopup {
-    width: min(860px, 94vw);
     max-height: 90vh;
-    padding: 24px;
-    border: 2px solid var(--outline);
-    border-radius: 12px;
-    background: var(--surface);
-    color: inherit;
     overflow: auto;
 }
 
@@ -280,6 +443,7 @@
     gap: 24px;
 }
 
+.ConfirmPopup::backdrop,
 .CardPopup::backdrop {
     background: var(--backdrop);
 }
@@ -290,10 +454,8 @@
     right: 12px;
     border: none;
     background: none;
-    color: inherit;
     font-size: 1.5rem;
     line-height: 1;
-    cursor: pointer;
 }
 
 .CardPopupImage {
@@ -348,87 +510,17 @@
     }
 }
 
-.DeckList {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 12px;
-    margin-bottom: 16px;
+.SettingsPage {
+    gap: 16px;
 }
 
-.CreateDeckButton {
-    position: fixed;
-    bottom: 72px;
-    right: 16px;
-    padding: 10px 16px;
-    border: 2px solid var(--outline);
-    border-radius: 8px;
-    background: var(--surface);
-    color: inherit;
-    font: inherit;
-    cursor: pointer;
-}
-
-.DeckBox {
-    min-width: 140px;
-    padding: 24px 16px;
-    border: 2px solid var(--outline);
-    border-radius: 8px;
-    background: none;
-    color: inherit;
-    font: inherit;
-    cursor: pointer;
-}
-
-.DeckBox:hover {
-    background: var(--tint-weak);
-}
-
-.AuthPage {
-    display: flex;
-    background-color: var(--auth-bg);
-    flex-direction: column;
-    align-items: center;
-    font-family: system-ui, sans-serif;
-    justify-content: center;
-    min-height: 100vh;
-    color:var(--accent);
+.SettingsPage h1 {
     margin: 0;
-    text-align: center;
 }
 
-a:link{
-    color: var(--link);
-    text-decoration: none;
-}
-
-.AuthPage form {
-    width: 100%;
-    max-width: 320px;
-    color: var(--accent);
-}
-.UserInput input:focus,
-.AuthPage form:focus {
-    outline: var(--accent) solid 2px;
-}
-
-
-.UserInput input {
-    border: 2px solid var(--auth-border);
-    padding: 2px 4px;
-    background-color: var(--auth-bg);
-    border-radius: 5px
-}
-
-.AuthPage button[type="submit"] {
-    background-color: var(--auth-bg);
-    border-radius: 5px;
-    font-family: system-ui, sans-serif;
-    border: solid var(--auth-border) 2px;
-    color: var(--accent);
-}
-
-.AuthPage button[type="submit"]:hover {
-    background-color: var(--auth-input-bg);
-    color: var(--accent);
-    border: solid var(--auth-input-border) 2px;
+.SettingsPage .BackButton,
+.DeckToolbar {
+    position: fixed;
+    top: 16px;
+    left: 16px;
 }

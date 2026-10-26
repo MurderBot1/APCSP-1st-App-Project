@@ -27,6 +27,14 @@ function createElement(tag, attributes = {}, text = '') {
     return element;
 }
 
+function sendJSON(url, method, body) {
+    return fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+    });
+}
+
 function createField(labelText, type, id, name, placeholder) {
     const fragment = document.createDocumentFragment();
     fragment.appendChild(createElement('label', { for: id }, labelText));
@@ -84,13 +92,9 @@ function createDropdown(options, onChange) {
 }
 
 async function submitCredentials(endpoint, form) {
-    const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            username: form.elements['Username'].value,
-            password: form.elements['Password'].value
-        })
+    const response = await sendJSON(endpoint, 'POST', {
+        username: form.elements['Username'].value,
+        password: form.elements['Password'].value
     });
     const data = await response.json();
 
@@ -148,14 +152,16 @@ function mapCard(card) {
     };
 }
 
+const SCRYFALL_BATCH_SIZE = 75;
+
 async function fetchCardsByIds(ids) {
     const cards = [];
-    for (let i = 0; i < ids.length; i += 75) {
-        const response = await fetch('https://api.scryfall.com/cards/collection', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ identifiers: ids.slice(i, i + 75).map((id) => ({ id })) })
-        });
+    for (let i = 0; i < ids.length; i += SCRYFALL_BATCH_SIZE) {
+        if (i > 0) {
+            await new Promise((resolve) => setTimeout(resolve, 500));
+        }
+        const identifiers = ids.slice(i, i + SCRYFALL_BATCH_SIZE).map((id) => ({ id }));
+        const response = await sendJSON('https://api.scryfall.com/cards/collection', 'POST', { identifiers });
         if (!response.ok) {
             throw new Error(`Card lookup failed (${response.status})`);
         }
@@ -209,18 +215,26 @@ function renderSignup() {
     });
 }
 
+const SEARCH_ICON = '<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><circle cx="10" cy="10" r="6.5"/><path d="M15 15l6 6"/></svg>';
+
 function renderBottomNav(active) {
     const nav = container.appendChild(createElement('nav', { class: 'BottomNav' }));
-    const search = nav.appendChild(createButton('Search', renderSearch));
-    const decks = nav.appendChild(createButton('Decks', renderDecks));
+    const search = nav.appendChild(createButton('', renderSearch));
+    search.setAttribute('aria-label', 'Search');
+    search.innerHTML = SEARCH_ICON;
+    const decks = nav.appendChild(createButton('', renderDecks));
+    decks.setAttribute('aria-label', 'Decks');
+    decks.appendChild(createElement('span', { class: 'DecksIcon' }));
     const current = active === 'search' ? search : decks;
     current.className = 'Active';
     current.setAttribute('aria-current', 'page');
 }
 
+const SETTINGS_ICON = '<svg viewBox="0 0 24 24" width="28" height="28" fill="currentColor" aria-hidden="true"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.488.488 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>';
+
 function renderSettingsButton(parent = container) {
     const button = parent.appendChild(createButton('', renderSettings, 'SettingsButton'));
-    button.innerHTML = '<svg viewBox="0 0 24 24" width="28" height="28" fill="currentColor" aria-hidden="true"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.488.488 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>';
+    button.innerHTML = SETTINGS_ICON;
     button.setAttribute('aria-label', 'Settings');
     button.title = 'Settings';
 }
@@ -270,9 +284,32 @@ function createSearchForm(results, onAdd) {
     return form;
 }
 
-async function renderCardResults(results, query, isCurrent, onAdd) {
-    results.replaceChildren(createElement('p', {}, 'Searching...'));
+function createCardResult(card, onAdd) {
+    const item = createElement('button', { type: 'button', class: 'CardResult' });
+    if (card.image) {
+        item.appendChild(createElement('img', { src: card.image, alt: card.name }));
+    }
+    item.addEventListener('click', () => showCardPopup(card));
+    if (!onAdd) {
+        return item;
+    }
 
+    const wrapper = createElement('div', { class: 'CardResultWrapper' });
+    wrapper.appendChild(item);
+    const count = wrapper.appendChild(createElement('span', { class: 'AddedCount' }));
+    const add = wrapper.appendChild(createButton('+', async () => {
+        add.disabled = true;
+        const quantity = await onAdd(card);
+        add.disabled = false;
+        if (quantity) {
+            count.textContent = `×${quantity}`;
+        }
+    }, 'AddCardButton'));
+    add.setAttribute('aria-label', `Add ${card.name} to deck`);
+    return wrapper;
+}
+
+async function renderCardResults(results, query, isCurrent, onAdd) {
     let cards;
     try {
         cards = await searchCards(query);
@@ -292,33 +329,11 @@ async function renderCardResults(results, query, isCurrent, onAdd) {
         results.replaceChildren(createElement('p', {}, 'No cards found'));
         return;
     }
-    results.replaceChildren(...cards.map((card) => {
-        const item = createElement('button', { type: 'button', class: 'CardResult' });
-        if (card.image) {
-            item.appendChild(createElement('img', { src: card.image, alt: card.name }));
-        }
-        item.addEventListener('click', () => showCardPopup(card));
-        if (!onAdd) {
-            return item;
-        }
-
-        const wrapper = createElement('div', { class: 'CardResultWrapper' });
-        wrapper.appendChild(item);
-        const add = wrapper.appendChild(createButton('+', async () => {
-            add.disabled = true;
-            if (await onAdd(card)) {
-                add.textContent = '✓';
-            } else {
-                add.disabled = false;
-            }
-        }, 'AddCardButton'));
-        add.setAttribute('aria-label', `Add ${card.name} to deck`);
-        return wrapper;
-    }));
+    results.replaceChildren(...cards.map((card) => createCardResult(card, onAdd)));
 }
 
-function showAddCardsPopup(onAdd) {
-    const dialog = document.body.appendChild(createElement('dialog', { class: 'SearchPopup' }));
+function createDialog(className) {
+    const dialog = document.body.appendChild(createElement('dialog', { class: className }));
     dialog.addEventListener('close', () => dialog.remove());
     dialog.addEventListener('click', (event) => {
         if (event.target === dialog) {
@@ -329,27 +344,50 @@ function showAddCardsPopup(onAdd) {
     const closeButton = createButton('×', () => dialog.close(), 'CardPopupClose');
     closeButton.setAttribute('aria-label', 'Close');
     dialog.appendChild(closeButton);
+    return dialog;
+}
+
+function showAddCardsPopup(onAdd) {
+    const dialog = createDialog('SearchPopup');
 
     const results = createElement('div', { class: 'CardResults' });
-    const form = dialog.appendChild(createSearchForm(results, onAdd));
+    const bar = dialog.appendChild(createElement('div', { class: 'TopBar' }));
+    const form = bar.appendChild(createSearchForm(results, onAdd));
+    bar.appendChild(dialog.querySelector('.CardPopupClose'));
     dialog.appendChild(results);
 
     dialog.showModal();
     form.elements['SearchBar'].focus();
 }
 
-function showCardPopup(card) {
-    const dialog = document.body.appendChild(createElement('dialog', { class: 'CardPopup' }));
-    dialog.addEventListener('close', () => dialog.remove());
-    dialog.addEventListener('click', (event) => {
-        if (event.target === dialog) {
-            dialog.close();
-        }
-    });
+function showDeleteDeckPopup(deckKey) {
+    const dialog = createDialog('ConfirmPopup');
+    dialog.appendChild(createElement('p', {}, 'Delete this deck and all its cards? This cannot be undone.'));
 
-    const closeButton = createButton('×', () => dialog.close(), 'CardPopupClose');
-    closeButton.setAttribute('aria-label', 'Close');
-    dialog.appendChild(closeButton);
+    const actions = dialog.appendChild(createElement('div', { class: 'ConfirmActions' }));
+    actions.appendChild(createButton('Cancel', () => dialog.close()));
+    actions.appendChild(createButton('Delete', async (event) => {
+        const button = event.currentTarget;
+        button.disabled = true;
+        const response = await fetch(`/api/decks/${encodeURIComponent(deckKey)}`, { method: 'DELETE' });
+        if (response.status === 401) {
+            dialog.close();
+            return renderLogin();
+        }
+        if (!response.ok) {
+            button.disabled = false;
+            dialog.appendChild(createElement('p', { class: 'FormError' }, 'Could not delete deck'));
+            return;
+        }
+        dialog.close();
+        renderDecks();
+    }, 'ConfirmDelete'));
+
+    dialog.showModal();
+}
+
+function showCardPopup(card) {
+    const dialog = createDialog('CardPopup');
 
     const image = dialog.appendChild(createElement('div', { class: 'CardPopupImage' }));
     if (card.largeImage) {
@@ -408,15 +446,55 @@ async function renderDecks() {
     const { decks = [] } = await response.json();
 
     const list = container.appendChild(createElement('div', { class: 'DeckList' }));
-    if (!decks.length) {
-        list.appendChild(createElement('p', {}, 'No decks yet'));
-    }
     for (const deck of decks) {
-        list.appendChild(createButton(deck.name, () => renderDeck(deck.key), 'DeckBox'));
+        const box = list.appendChild(createButton(deck.name, () => renderDeck(deck.key), 'DeckBox'));
+        box.addEventListener('contextmenu', (event) => {
+            event.preventDefault();
+            renameDeck(deck, box);
+        });
     }
 
     container.appendChild(createButton('+ Create Deck', createDeck, 'CreateDeckButton'));
     renderBottomNav('decks');
+}
+
+function renameDeck(deck, box) {
+    const input = createElement('input', { type: 'text', class: 'DeckNameInput', maxlength: '100' });
+    input.value = deck.name;
+    const { width, height } = box.getBoundingClientRect();
+    input.style.width = `${width}px`;
+    input.style.height = `${height}px`;
+    box.replaceWith(input);
+    input.focus();
+    input.select();
+
+    let done = false;
+    const finish = async (save) => {
+        if (done) {
+            return;
+        }
+        done = true;
+        const name = input.value.trim();
+        if (save && name && name !== deck.name) {
+            const response = await sendJSON(`/api/decks/${encodeURIComponent(deck.key)}`, 'PATCH', { name });
+            if (response.status === 401) {
+                return renderLogin();
+            }
+            if (response.ok) {
+                deck.name = name;
+            }
+        }
+        box.textContent = deck.name;
+        input.replaceWith(box);
+    };
+    input.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+            finish(true);
+        } else if (event.key === 'Escape') {
+            finish(false);
+        }
+    });
+    input.addEventListener('blur', () => finish(true));
 }
 
 async function createDeck() {
@@ -432,6 +510,8 @@ const VIEW_ICONS = {
     cards: '<path d="M3 3h8v8H3zm10 0h8v8h-8zM3 13h8v8H3zm10 0h8v8h-8z"/>'
 };
 
+const TRASH_ICON = '<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>';
+
 const DECK_VIEW_COOKIE = 'deckView';
 
 function readDeckView() {
@@ -443,26 +523,49 @@ function saveDeckView(view) {
     document.cookie = `${DECK_VIEW_COOKIE}=${view}; Path=/; Max-Age=31536000; SameSite=Lax`;
 }
 
-function createDeckCard(card) {
-    const item = createElement('button', { type: 'button', class: 'DeckCard' });
+function createDeckCard(card, quantity, onChange) {
+    const wrapper = createElement('div', { class: 'DeckCardWrapper' });
+    const item = wrapper.appendChild(createElement('button', { type: 'button', class: 'DeckCard' }));
     if (card.image) {
         item.appendChild(createElement('img', { src: card.image, alt: card.name }));
     }
     item.appendChild(createElement('span', { class: 'DeckCardName' }, card.name));
     item.addEventListener('click', () => showCardPopup(card));
-    return item;
+
+    const controls = wrapper.appendChild(createElement('div', { class: 'DeckCardControls' }));
+    const step = (delta) => async () => {
+        minus.disabled = plus.disabled = true;
+        await onChange(card, delta);
+        minus.disabled = plus.disabled = false;
+    };
+    const minus = controls.appendChild(createButton('-', step(-1), 'DeckCardStep'));
+    controls.appendChild(createElement('span', { class: 'DeckCardCount' }, String(quantity)));
+    const plus = controls.appendChild(createButton('+', step(1), 'DeckCardStep'));
+    minus.setAttribute('aria-label', `Remove one ${card.name}`);
+    plus.setAttribute('aria-label', `Add one ${card.name}`);
+    return wrapper;
 }
 
-async function addCardToDeck(deckKey, cardId) {
-    const response = await fetch(`/api/decks/${encodeURIComponent(deckKey)}/cards`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cardId })
-    });
+function setDeckCard(cards, card, quantity, onChange) {
+    const existing = cards.querySelector(`[data-card-id="${card.id}"]`);
+    if (!quantity) {
+        existing?.remove();
+    } else if (existing) {
+        existing.querySelector('.DeckCardCount').textContent = String(quantity);
+    } else {
+        cards.appendChild(createDeckCard(card, quantity, onChange)).dataset.cardId = card.id;
+    }
+}
+
+async function changeCardQuantity(deckKey, cardId, delta) {
+    const url = `/api/decks/${encodeURIComponent(deckKey)}/cards`;
+    const response = delta > 0
+        ? await sendJSON(url, 'POST', { cardId })
+        : await fetch(`${url}/${encodeURIComponent(cardId)}`, { method: 'DELETE' });
     if (response.status === 401) {
         renderLogin();
     }
-    return response.ok;
+    return response.ok ? (await response.json()).quantity : null;
 }
 
 async function renderDeck(ID, view = readDeckView()) {
@@ -472,6 +575,10 @@ async function renderDeck(ID, view = readDeckView()) {
     toolbar.appendChild(createButton('← Back', renderDecks, 'BackButton'));
 
     const toggle = toolbar.appendChild(createElement('div', { class: 'ViewToggle', role: 'group', 'aria-label': 'Deck view' }));
+    const deleteButton = toolbar.appendChild(createButton('', () => showDeleteDeckPopup(ID), 'DeleteDeckButton'));
+    deleteButton.setAttribute('aria-label', 'Delete deck');
+    deleteButton.title = 'Delete deck';
+    deleteButton.innerHTML = TRASH_ICON;
     const cards = container.appendChild(createElement('div', { class: `DeckCards ${view}View` }));
     for (const [name, label] of [['list', 'List view'], ['cards', 'Card view']]) {
         const button = toggle.appendChild(createButton('', () => {
@@ -485,17 +592,15 @@ async function renderDeck(ID, view = readDeckView()) {
         button.innerHTML = `<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true">${VIEW_ICONS[name]}</svg>`;
     }
 
+    const changeQuantity = async (card, delta) => {
+        const quantity = await changeCardQuantity(ID, card.id, delta);
+        if (quantity !== null) {
+            setDeckCard(cards, card, quantity, changeQuantity);
+        }
+        return quantity;
+    };
     const addButton = container.appendChild(createButton('+', () => {
-        showAddCardsPopup(async (card) => {
-            if (!await addCardToDeck(ID, card.id)) {
-                return false;
-            }
-            if (!cards.querySelector(`[data-card-id="${card.id}"]`)) {
-                const item = cards.appendChild(createDeckCard(card));
-                item.dataset.cardId = card.id;
-            }
-            return true;
-        });
+        showAddCardsPopup((card) => changeQuantity(card, 1));
     }, 'AddToDeckButton'));
     addButton.setAttribute('aria-label', 'Add cards');
     addButton.title = 'Add cards';
@@ -508,12 +613,10 @@ async function renderDeck(ID, view = readDeckView()) {
         return;
     }
     try {
-        const { cards: ids } = await response.json();
-        for (const card of await fetchCardsByIds(ids)) {
-            if (!cards.querySelector(`[data-card-id="${card.id}"]`)) {
-                const item = cards.appendChild(createDeckCard(card));
-                item.dataset.cardId = card.id;
-            }
+        const { cards: entries } = await response.json();
+        const quantities = new Map(entries.map((entry) => [entry.id, entry.quantity]));
+        for (const card of await fetchCardsByIds([...quantities.keys()])) {
+            setDeckCard(cards, card, quantities.get(card.id), changeQuantity);
         }
     } catch (error) {
         console.error(error);
@@ -522,15 +625,12 @@ async function renderDeck(ID, view = readDeckView()) {
 }
 
 async function getUsdToEurRate() {
-    const url = 'https://api.frankfurter.dev/v2/rate/usd/eur';
-
     try {
-        const response = await fetch(url);
-        if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
-
-        const data = await response.json();
-        console.log(`1 ${data.base} = ${data.rate} ${data.quote} (Date: ${data.date})`);
-        return data.rate;
+        const response = await fetch('https://api.frankfurter.dev/v2/rate/usd/eur');
+        if (!response.ok) {
+            throw new Error(`Rate lookup failed (${response.status})`);
+        }
+        return (await response.json()).rate;
     } catch (error) {
         console.error('Failed to fetch rate:', error);
     }
@@ -561,23 +661,51 @@ function formatPrice(usd) {
     return currency === 'EUR' ? `€${(usd * usdToEurRate).toFixed(2)}` : `$${usd}`;
 }
 
+const CURRENCY_OPTIONS = [
+    { value: 'USD', text: 'US Dollar' },
+    { value: 'EUR', text: 'Euro' }
+];
+
 function renderSettings() {
     wipeHTML('/settings');
+    container.className = 'SettingsPage';
+
+    const back = container.appendChild(createButton('←', renderSearch, 'BackButton'));
+    back.setAttribute('aria-label', 'Back');
+    back.title = 'Back';
 
     container.appendChild(createElement('h1', {}, 'Settings'));
-    container.appendChild(createButton('Log Out', logOut));
-    container.appendChild(createButton('Back', renderSearch));
-    const dropdown = container.appendChild(createDropdown([{ value: "USD", text: "US Dollar" }, { value: "EUR", text: "Euro" }], async (value) => {
-       await setCurrency(value);
-       fetch('/api/user-settings', {
-           method: 'POST',
-           headers: {
-               'Content-Type': 'application/json'
-           },
-           body: JSON.stringify({ currency: value })
-       });
-   }));
+    const dropdown = container.appendChild(createDropdown(CURRENCY_OPTIONS, async (value) => {
+        await setCurrency(value);
+        sendJSON('/api/user-settings', 'POST', { currency: value });
+    }));
     dropdown.value = currency;
+    container.appendChild(createButton('Credits', showCreditsPopup));
+    container.appendChild(createButton('Log Out', logOut));
+}
+
+function createExternalLink(href, text, title) {
+    return createElement('a', { href, title, target: '_blank', rel: 'noopener' }, text);
+}
+
+function showCreditsPopup() {
+    const dialog = createDialog('ConfirmPopup');
+    dialog.appendChild(createElement('h2', {}, 'Credits'));
+
+    const icons = dialog.appendChild(createElement('p'));
+    icons.appendChild(createExternalLink(
+        'https://www.flaticon.com/free-icons/cards',
+        'Cards icons created by Unknown Depths - Flaticon',
+        'cards icons'
+    ));
+
+    const cards = dialog.appendChild(createElement('p', {}, 'Card data and images from '));
+    cards.appendChild(createExternalLink('https://scryfall.com', 'Scryfall'));
+
+    const rates = dialog.appendChild(createElement('p', {}, 'Exchange rates from '));
+    rates.appendChild(createExternalLink('https://frankfurter.dev', 'Frankfurter'));
+
+    dialog.showModal();
 }
 
 async function logOut() {
