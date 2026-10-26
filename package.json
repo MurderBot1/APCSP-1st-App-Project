@@ -5,7 +5,9 @@
   "main": "server/main.js",
   "scripts": {
     "start": "node --env-file-if-exists=.env server/main.js",
-    "dev": "node --watch --env-file-if-exists=.env server/main.js"
+    "dev": "node --watch --env-file-if-exists=.env server/main.js",
+    "db:local": "node scripts/local-db.js",
+    "dev:local": "node --watch --env-file=.env.local server/main.js"
   },
   "repository": {
     "type": "git",
