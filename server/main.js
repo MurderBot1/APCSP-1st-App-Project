@@ -6,12 +6,18 @@ const mysql = require('mysql2/promise');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+const missingEnv = ['DB_HOST', 'DB_PORT', 'DB_NAME', 'DB_USER', 'DB_PASSWORD'].filter((name) => !process.env[name]);
+if (missingEnv.length) {
+    console.error(`Missing environment variables: ${missingEnv.join(', ')}`);
+}
+
 const db = mysql.createPool({
     host: process.env.DB_HOST,
     port: process.env.DB_PORT,
     database: process.env.DB_NAME,
     user: process.env.DB_USER,
-    password: process.env.DB_PASSWORD
+    password: process.env.DB_PASSWORD,
+    connectTimeout: 10000
 });
 
 app.use(express.json());
@@ -400,6 +406,7 @@ app.get(['/login', '/signup', '/search', '/decks', '/decks/:deckKey', '/shared/:
     res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
 });
 
+console.log(`Connecting to database ${process.env.DB_HOST}:${process.env.DB_PORT}...`);
 initDatabase()
     .then(() => {
         app.listen(PORT, () => {
@@ -407,6 +414,6 @@ initDatabase()
         });
     })
     .catch((error) => {
-        console.error('Could not connect to the database:', error.message);
+        console.error(`Could not connect to the database (${error.code ?? 'no code'}):`, error.message);
         process.exit(1);
     });
