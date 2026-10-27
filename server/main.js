@@ -82,6 +82,10 @@ const UPDATE_DECK_NAME = 'UPDATE decks SET name = ? WHERE deck_key = ? AND usern
 const INSERT_DECK_CARD = 'INSERT INTO deck_cards (deck_key, card_id) VALUES (?, ?) ON DUPLICATE KEY UPDATE quantity = quantity + 1';
 const DECREMENT_DECK_CARD = 'UPDATE deck_cards SET quantity = quantity - 1 WHERE deck_key = ? AND card_id = ? AND quantity > 0';
 const DELETE_EMPTY_DECK_CARD = 'DELETE FROM deck_cards WHERE deck_key = ? AND card_id = ? AND quantity = 0';
+const SET_DECK_CARD_QUANTITY = 'INSERT INTO deck_cards (deck_key, card_id, quantity) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE quantity = ?';
+const DELETE_DECK_CARD = 'DELETE FROM deck_cards WHERE deck_key = ? AND card_id = ?';
+const DELETE_ALL_DECK_CARDS = 'DELETE FROM deck_cards WHERE deck_key = ?';
+const SELECT_DECK_NAME = 'SELECT name FROM decks WHERE deck_key = ?';
 const SELECT_USER_CURRENCY = 'SELECT currency FROM user_settings WHERE username = ?';
 const UPSERT_USER_CURRENCY = 'INSERT INTO user_settings (username, currency) VALUES (?, ?) ON DUPLICATE KEY UPDATE currency = ?';
 
@@ -102,6 +106,7 @@ async function initDatabase() {
     await db.query(DELETE_EXPIRED_SESSIONS);
 }
 
+const MAX_CARD_QUANTITY = 999;
 const SESSION_COOKIE = 'session';
 const SESSION_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -303,6 +308,58 @@ app.delete('/api/decks/:deckKey/cards/:cardId', requireAuth, async (req, res) =>
     }
 });
 
+app.put('/api/decks/:deckKey/cards/:cardId', requireAuth, async (req, res) => {
+    const { deckKey, cardId } = req.params;
+    const { quantity } = req.body ?? {};
+    if (!Number.isInteger(quantity) || quantity < 0 || quantity > MAX_CARD_QUANTITY) {
+        return res.status(400).json({ error: `Quantity must be 0-${MAX_CARD_QUANTITY}` });
+    }
+    try {
+        const [decks] = await db.query(SELECT_OWNED_DECK, [deckKey, req.username]);
+        if (!decks[0]) {
+            return res.status(404).json({ error: 'Deck not found' });
+        }
+        if (quantity) {
+            await db.query(SET_DECK_CARD_QUANTITY, [deckKey, cardId, quantity, quantity]);
+        } else {
+            await db.query(DELETE_DECK_CARD, [deckKey, cardId]);
+        }
+        res.json({ ok: true, quantity });
+    } catch (error) {
+        serverError(res, error);
+    }
+});
+
+app.delete('/api/decks/:deckKey/cards', requireAuth, async (req, res) => {
+    try {
+        const [decks] = await db.query(SELECT_OWNED_DECK, [req.params.deckKey, req.username]);
+        if (!decks[0]) {
+            return res.status(404).json({ error: 'Deck not found' });
+        }
+        await db.query(DELETE_ALL_DECK_CARDS, [req.params.deckKey]);
+        res.json({ ok: true });
+    } catch (error) {
+        serverError(res, error);
+    }
+});
+
+app.get('/api/shared/:deckKey', async (req, res) => {
+    try {
+        const [decks] = await db.query(SELECT_DECK_NAME, [req.params.deckKey]);
+        if (!decks[0]) {
+            return res.status(404).json({ error: 'Deck not found' });
+        }
+        const [rows] = await db.query(SELECT_DECK_CARDS, [req.params.deckKey]);
+        res.json({
+            ok: true,
+            name: decks[0].name,
+            cards: rows.map((row) => ({ id: row.card_id, quantity: row.quantity }))
+        });
+    } catch (error) {
+        serverError(res, error);
+    }
+});
+
 app.post('/api/logout', async (req, res) => {
     const token = readSessionToken(req);
     try {
@@ -339,7 +396,7 @@ app.post('/api/user-settings', requireAuth, async (req, res) => {
     }
 });
 
-app.get(['/login', '/signup', '/search', '/decks', '/decks/:deckKey', '/settings'], (req, res) => {
+app.get(['/login', '/signup', '/search', '/decks', '/decks/:deckKey', '/shared/:deckKey', '/settings'], (req, res) => {
     res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
 });
 

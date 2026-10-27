@@ -524,3 +524,51 @@ a:link {
     top: 16px;
     left: 16px;
 }
+
+.SearchRow {
+    display: flex;
+    gap: 8px;
+}
+
+.PageButton,
+.ToolbarButton {
+    border-radius: 8px;
+}
+
+.PageButton {
+    padding: 4px 14px;
+    font-size: 1.3rem;
+    line-height: 1;
+}
+
+.ToolbarButton:hover,
+.PageButton:hover {
+    background-color: var(--auth-input-bg);
+}
+
+.CountInput {
+    width: 56px;
+    padding: 4px;
+    border: 2px solid var(--outline);
+    border-radius: 5px;
+    background: var(--auth-input-bg);
+    color: inherit;
+    font: inherit;
+    text-align: center;
+    box-sizing: border-box;
+}
+
+.CardResultWrapper .CountInput {
+    position: absolute;
+    right: 6px;
+    bottom: 6px;
+}
+
+.SharedDeckTitle {
+    margin: 64px 0 0;
+    text-align: center;
+}
+
+.SharedDeckTitle + .DeckCards {
+    padding-top: 16px;
+}

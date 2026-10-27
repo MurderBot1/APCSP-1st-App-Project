@@ -111,16 +111,16 @@ async function submitCredentials(endpoint, form) {
     renderSearch();
 }
 
-async function searchCards(query) {
-    const response = await fetch(`https://api.scryfall.com/cards/search?unique=prints&q=${encodeURIComponent(query)}`);
+async function searchCards(query, page = 1) {
+    const response = await fetch(`https://api.scryfall.com/cards/search?unique=prints&page=${page}&q=${encodeURIComponent(query)}`);
     if (response.status === 404) {
-        return [];
+        return { cards: [], hasMore: false };
     }
     if (!response.ok) {
         throw new Error(`Card search failed (${response.status})`);
     }
-    const { data } = await response.json();
-    return data.map(mapCard);
+    const { data, has_more } = await response.json();
+    return { cards: data.map(mapCard), hasMore: has_more };
 }
 
 function mapCard(card) {
@@ -252,25 +252,86 @@ function renderSearch() {
     renderBottomNav('search');
 }
 
-function createSearchForm(results, onAdd) {
+function createSearchForm(results, onAdd, onSetCount) {
     const form = createElement('form');
-    const searchWrapper = form.appendChild(createElement('div'));
-    searchWrapper.appendChild(createElement('input', {
+    const row = form.appendChild(createElement('div', { class: 'SearchRow' }));
+    row.appendChild(createElement('input', {
         type: 'text',
         id: 'SearchBar',
         name: 'SearchBar',
         placeholder: 'Search for a card...'
     }));
+
     let searchTimer;
     let latestQuery = '';
-    const runSearch = async () => {
-        const query = form.elements['SearchBar'].value.trim();
-        latestQuery = query;
-        if (!query) {
+    let page = 1;
+    let hasMore = false;
+    let loading = false;
+
+    const pageButton = (text, label, delta) => {
+        const button = row.appendChild(createButton(text, () => loadPage(page + delta, false), 'PageButton'));
+        button.setAttribute('aria-label', label);
+        button.hidden = true;
+        return button;
+    };
+    const prev = onAdd ? null : pageButton('‹', 'Previous page', -1);
+    const next = onAdd ? null : pageButton('›', 'Next page', 1);
+    const updatePager = () => {
+        if (!prev) {
+            return;
+        }
+        prev.hidden = !latestQuery || page === 1;
+        next.hidden = !latestQuery || !hasMore;
+    };
+
+    const loadPage = async (pageNumber, append) => {
+        const query = latestQuery;
+        loading = true;
+        try {
+            const result = await searchCards(query, pageNumber);
+            if (query !== latestQuery) {
+                return;
+            }
+            page = pageNumber;
+            hasMore = result.hasMore;
+            if (!append && !result.cards.length) {
+                results.replaceChildren(createElement('p', {}, 'No cards found'));
+                return;
+            }
+            const items = result.cards.map((card) => createCardResult(card, onAdd, onSetCount));
+            if (append) {
+                results.append(...items);
+            } else {
+                results.replaceChildren(...items);
+                window.scrollTo(0, 0);
+            }
+        } catch (error) {
+            console.error(error);
+            if (query === latestQuery && !append) {
+                results.replaceChildren(createElement('p', { class: 'FormError' }, 'Search failed, try again'));
+            }
+        } finally {
+            loading = false;
+            updatePager();
+        }
+    };
+
+    const runSearch = () => {
+        latestQuery = form.elements['SearchBar'].value.trim();
+        page = 1;
+        hasMore = false;
+        updatePager();
+        if (!latestQuery) {
             results.replaceChildren();
             return;
         }
-        await renderCardResults(results, query, () => query === latestQuery, onAdd);
+        return loadPage(1, false);
+    };
+
+    form.loadMore = () => {
+        if (hasMore && !loading) {
+            loadPage(page + 1, true);
+        }
     };
     form.elements['SearchBar'].addEventListener('input', () => {
         clearTimeout(searchTimer);
@@ -284,7 +345,36 @@ function createSearchForm(results, onAdd) {
     return form;
 }
 
-function createCardResult(card, onAdd) {
+function promptCount(target, current, onSubmit) {
+    const input = createElement('input', { type: 'number', class: 'CountInput', min: '0', max: '999' });
+    input.value = current;
+    target.replaceWith(input);
+    input.focus();
+    input.select();
+
+    let done = false;
+    const finish = async (save) => {
+        if (done) {
+            return;
+        }
+        done = true;
+        const quantity = Number.parseInt(input.value, 10);
+        input.replaceWith(target);
+        if (save && Number.isInteger(quantity) && quantity >= 0 && quantity !== Number(current)) {
+            await onSubmit(quantity);
+        }
+    };
+    input.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+            finish(true);
+        } else if (event.key === 'Escape') {
+            finish(false);
+        }
+    });
+    input.addEventListener('blur', () => finish(true));
+}
+
+function createCardResult(card, onAdd, onSetCount) {
     const item = createElement('button', { type: 'button', class: 'CardResult' });
     if (card.image) {
         item.appendChild(createElement('img', { src: card.image, alt: card.name }));
@@ -297,39 +387,29 @@ function createCardResult(card, onAdd) {
     const wrapper = createElement('div', { class: 'CardResultWrapper' });
     wrapper.appendChild(item);
     const count = wrapper.appendChild(createElement('span', { class: 'AddedCount' }));
+    const showQuantity = (quantity) => {
+        count.textContent = quantity ? `×${quantity}` : '';
+    };
     const add = wrapper.appendChild(createButton('+', async () => {
         add.disabled = true;
         const quantity = await onAdd(card);
         add.disabled = false;
         if (quantity) {
-            count.textContent = `×${quantity}`;
+            showQuantity(quantity);
         }
     }, 'AddCardButton'));
     add.setAttribute('aria-label', `Add ${card.name} to deck`);
+    add.addEventListener('contextmenu', (event) => {
+        event.preventDefault();
+        const current = Number.parseInt(count.textContent.slice(1), 10) || 0;
+        promptCount(add, current, async (quantity) => {
+            const saved = await onSetCount(card, quantity);
+            if (saved !== null) {
+                showQuantity(saved);
+            }
+        });
+    });
     return wrapper;
-}
-
-async function renderCardResults(results, query, isCurrent, onAdd) {
-    let cards;
-    try {
-        cards = await searchCards(query);
-    } catch (error) {
-        console.error(error);
-        if (isCurrent()) {
-            results.replaceChildren(createElement('p', { class: 'FormError' }, 'Search failed, try again'));
-        }
-        return;
-    }
-
-    if (!isCurrent()) {
-        return;
-    }
-
-    if (!cards.length) {
-        results.replaceChildren(createElement('p', {}, 'No cards found'));
-        return;
-    }
-    results.replaceChildren(...cards.map((card) => createCardResult(card, onAdd)));
 }
 
 function createDialog(className) {
@@ -347,12 +427,17 @@ function createDialog(className) {
     return dialog;
 }
 
-function showAddCardsPopup(onAdd) {
+function showAddCardsPopup(onAdd, onSetCount) {
     const dialog = createDialog('SearchPopup');
 
     const results = createElement('div', { class: 'CardResults' });
     const bar = dialog.appendChild(createElement('div', { class: 'TopBar' }));
-    const form = bar.appendChild(createSearchForm(results, onAdd));
+    const form = bar.appendChild(createSearchForm(results, onAdd, onSetCount));
+    dialog.addEventListener('scroll', () => {
+        if (dialog.scrollTop + dialog.clientHeight >= dialog.scrollHeight - 400) {
+            form.loadMore();
+        }
+    });
     bar.appendChild(dialog.querySelector('.CardPopupClose'));
     dialog.appendChild(results);
 
@@ -360,30 +445,50 @@ function showAddCardsPopup(onAdd) {
     form.elements['SearchBar'].focus();
 }
 
-function showDeleteDeckPopup(deckKey) {
+function showConfirmPopup({ message, actionText, request, errorText, onDone }) {
     const dialog = createDialog('ConfirmPopup');
-    dialog.appendChild(createElement('p', {}, 'Delete this deck and all its cards? This cannot be undone.'));
+    dialog.appendChild(createElement('p', {}, message));
 
     const actions = dialog.appendChild(createElement('div', { class: 'ConfirmActions' }));
     actions.appendChild(createButton('Cancel', () => dialog.close()));
-    actions.appendChild(createButton('Delete', async (event) => {
+    actions.appendChild(createButton(actionText, async (event) => {
         const button = event.currentTarget;
         button.disabled = true;
-        const response = await fetch(`/api/decks/${encodeURIComponent(deckKey)}`, { method: 'DELETE' });
+        const response = await request();
         if (response.status === 401) {
             dialog.close();
             return renderLogin();
         }
         if (!response.ok) {
             button.disabled = false;
-            dialog.appendChild(createElement('p', { class: 'FormError' }, 'Could not delete deck'));
+            dialog.appendChild(createElement('p', { class: 'FormError' }, errorText));
             return;
         }
         dialog.close();
-        renderDecks();
+        onDone();
     }, 'ConfirmDelete'));
 
     dialog.showModal();
+}
+
+function showDeleteDeckPopup(deckKey) {
+    showConfirmPopup({
+        message: 'Delete this deck and all its cards? This cannot be undone.',
+        actionText: 'Delete',
+        request: () => fetch(`/api/decks/${encodeURIComponent(deckKey)}`, { method: 'DELETE' }),
+        errorText: 'Could not delete deck',
+        onDone: renderDecks
+    });
+}
+
+function showClearDeckPopup(deckKey, onDone) {
+    showConfirmPopup({
+        message: 'Remove every card from this deck? The deck itself is kept.',
+        actionText: 'Clear',
+        request: () => fetch(`/api/decks/${encodeURIComponent(deckKey)}/cards`, { method: 'DELETE' }),
+        errorText: 'Could not clear deck',
+        onDone
+    });
 }
 
 function showCardPopup(card) {
@@ -523,7 +628,7 @@ function saveDeckView(view) {
     document.cookie = `${DECK_VIEW_COOKIE}=${view}; Path=/; Max-Age=31536000; SameSite=Lax`;
 }
 
-function createDeckCard(card, quantity, onChange) {
+function createDeckCard(card, quantity, onChange, onSet) {
     const wrapper = createElement('div', { class: 'DeckCardWrapper' });
     const item = wrapper.appendChild(createElement('button', { type: 'button', class: 'DeckCard' }));
     if (card.image) {
@@ -533,27 +638,35 @@ function createDeckCard(card, quantity, onChange) {
     item.addEventListener('click', () => showCardPopup(card));
 
     const controls = wrapper.appendChild(createElement('div', { class: 'DeckCardControls' }));
+    if (!onChange) {
+        controls.appendChild(createElement('span', { class: 'DeckCardCount' }, `×${quantity}`));
+        return wrapper;
+    }
     const step = (delta) => async () => {
         minus.disabled = plus.disabled = true;
         await onChange(card, delta);
         minus.disabled = plus.disabled = false;
     };
     const minus = controls.appendChild(createButton('-', step(-1), 'DeckCardStep'));
-    controls.appendChild(createElement('span', { class: 'DeckCardCount' }, String(quantity)));
+    const count = controls.appendChild(createElement('span', { class: 'DeckCardCount' }, String(quantity)));
     const plus = controls.appendChild(createButton('+', step(1), 'DeckCardStep'));
     minus.setAttribute('aria-label', `Remove one ${card.name}`);
     plus.setAttribute('aria-label', `Add one ${card.name}`);
+    count.addEventListener('contextmenu', (event) => {
+        event.preventDefault();
+        promptCount(count, count.textContent, (value) => onSet(card, value));
+    });
     return wrapper;
 }
 
-function setDeckCard(cards, card, quantity, onChange) {
+function setDeckCard(cards, card, quantity, onChange, onSet) {
     const existing = cards.querySelector(`[data-card-id="${card.id}"]`);
     if (!quantity) {
         existing?.remove();
     } else if (existing) {
         existing.querySelector('.DeckCardCount').textContent = String(quantity);
     } else {
-        cards.appendChild(createDeckCard(card, quantity, onChange)).dataset.cardId = card.id;
+        cards.appendChild(createDeckCard(card, quantity, onChange, onSet)).dataset.cardId = card.id;
     }
 }
 
@@ -568,6 +681,14 @@ async function changeCardQuantity(deckKey, cardId, delta) {
     return response.ok ? (await response.json()).quantity : null;
 }
 
+async function setCardQuantity(deckKey, cardId, quantity) {
+    const response = await sendJSON(`/api/decks/${encodeURIComponent(deckKey)}/cards/${encodeURIComponent(cardId)}`, 'PUT', { quantity });
+    if (response.status === 401) {
+        renderLogin();
+    }
+    return response.ok ? (await response.json()).quantity : null;
+}
+
 async function renderDeck(ID, view = readDeckView()) {
     wipeHTML(`/decks/${encodeURIComponent(ID)}`);
 
@@ -575,6 +696,21 @@ async function renderDeck(ID, view = readDeckView()) {
     toolbar.appendChild(createButton('← Back', renderDecks, 'BackButton'));
 
     const toggle = toolbar.appendChild(createElement('div', { class: 'ViewToggle', role: 'group', 'aria-label': 'Deck view' }));
+    const shareButton = toolbar.appendChild(createButton('Share', async () => {
+        try {
+            await navigator.clipboard.writeText(`${location.origin}/shared/${encodeURIComponent(ID)}`);
+            shareButton.textContent = 'Link copied!';
+        } catch (error) {
+            console.error(error);
+            shareButton.textContent = 'Copy failed';
+        }
+        setTimeout(() => {
+            shareButton.textContent = 'Share';
+        }, 2000);
+    }, 'ToolbarButton'));
+    const clearButton = toolbar.appendChild(createButton('Clear', () => {
+        showClearDeckPopup(ID, () => cards.replaceChildren());
+    }, 'ToolbarButton'));
     const deleteButton = toolbar.appendChild(createButton('', () => showDeleteDeckPopup(ID), 'DeleteDeckButton'));
     deleteButton.setAttribute('aria-label', 'Delete deck');
     deleteButton.title = 'Delete deck';
@@ -595,12 +731,19 @@ async function renderDeck(ID, view = readDeckView()) {
     const changeQuantity = async (card, delta) => {
         const quantity = await changeCardQuantity(ID, card.id, delta);
         if (quantity !== null) {
-            setDeckCard(cards, card, quantity, changeQuantity);
+            setDeckCard(cards, card, quantity, changeQuantity, setQuantity);
+        }
+        return quantity;
+    };
+    const setQuantity = async (card, value) => {
+        const quantity = await setCardQuantity(ID, card.id, value);
+        if (quantity !== null) {
+            setDeckCard(cards, card, quantity, changeQuantity, setQuantity);
         }
         return quantity;
     };
     const addButton = container.appendChild(createButton('+', () => {
-        showAddCardsPopup((card) => changeQuantity(card, 1));
+        showAddCardsPopup((card) => changeQuantity(card, 1), setQuantity);
     }, 'AddToDeckButton'));
     addButton.setAttribute('aria-label', 'Add cards');
     addButton.title = 'Add cards';
@@ -616,7 +759,35 @@ async function renderDeck(ID, view = readDeckView()) {
         const { cards: entries } = await response.json();
         const quantities = new Map(entries.map((entry) => [entry.id, entry.quantity]));
         for (const card of await fetchCardsByIds([...quantities.keys()])) {
-            setDeckCard(cards, card, quantities.get(card.id), changeQuantity);
+            setDeckCard(cards, card, quantities.get(card.id), changeQuantity, setQuantity);
+        }
+    } catch (error) {
+        console.error(error);
+        cards.appendChild(createElement('p', { class: 'FormError' }, 'Could not load cards'));
+    }
+}
+
+async function renderSharedDeck(deckKey) {
+    wipeHTML(`/shared/${encodeURIComponent(deckKey)}`);
+
+    const toolbar = container.appendChild(createElement('div', { class: 'DeckToolbar' }));
+    if (username) {
+        toolbar.appendChild(createButton('← Back', renderDecks, 'BackButton'));
+    }
+    const title = container.appendChild(createElement('h1', { class: 'SharedDeckTitle' }));
+    const cards = container.appendChild(createElement('div', { class: `DeckCards ${readDeckView()}View` }));
+
+    try {
+        const response = await fetch(`/api/shared/${encodeURIComponent(deckKey)}`);
+        if (!response.ok) {
+            title.textContent = 'Deck not found';
+            return;
+        }
+        const { name, cards: entries } = await response.json();
+        title.textContent = name;
+        const quantities = new Map(entries.map((entry) => [entry.id, entry.quantity]));
+        for (const card of await fetchCardsByIds([...quantities.keys()])) {
+            setDeckCard(cards, card, quantities.get(card.id));
         }
     } catch (error) {
         console.error(error);
@@ -717,6 +888,9 @@ async function logOut() {
 
 function route() {
     const path = location.pathname;
+    if (path.startsWith('/shared/')) {
+        return renderSharedDeck(decodeURIComponent(path.slice('/shared/'.length)));
+    }
     if (!username) {
         return path === '/signup' ? renderSignup() : renderLogin();
     }
@@ -746,7 +920,7 @@ async function restoreSession() {
     const path = location.pathname;
     if (username && ['/', '/login', '/signup'].includes(path)) {
         history.replaceState(null, '', '/search');
-    } else if (!username && path !== '/signup') {
+    } else if (!username && path !== '/signup' && !path.startsWith('/shared/')) {
         history.replaceState(null, '', '/login');
     }
     route();
