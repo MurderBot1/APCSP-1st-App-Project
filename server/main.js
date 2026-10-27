@@ -95,21 +95,30 @@ const SELECT_DECK_NAME = 'SELECT name FROM decks WHERE deck_key = ?';
 const SELECT_USER_CURRENCY = 'SELECT currency FROM user_settings WHERE username = ?';
 const UPSERT_USER_CURRENCY = 'INSERT INTO user_settings (username, currency) VALUES (?, ?) ON DUPLICATE KEY UPDATE currency = ?';
 
+const INIT_QUERY_TIMEOUT_MS = 15000;
+
+async function initQuery(label, sql) {
+    console.log(`Startup: ${label}...`);
+    const result = await db.query({ sql, timeout: INIT_QUERY_TIMEOUT_MS });
+    console.log(`Startup: ${label} done`);
+    return result;
+}
+
 async function initDatabase() {
-    await db.query(CREATE_USERS_TABLE);
-    await db.query(CREATE_SESSIONS_TABLE);
-    await db.query(CREATE_DECKS_TABLE);
-    await db.query(CREATE_USER_SETTINGS_TABLE);
-    const [nameColumn] = await db.query(SELECT_DECKS_NAME_COLUMN);
+    await initQuery('create users table', CREATE_USERS_TABLE);
+    await initQuery('create sessions table', CREATE_SESSIONS_TABLE);
+    await initQuery('create decks table', CREATE_DECKS_TABLE);
+    await initQuery('create user_settings table', CREATE_USER_SETTINGS_TABLE);
+    const [nameColumn] = await initQuery('check decks.name column', SELECT_DECKS_NAME_COLUMN);
     if (!nameColumn.length) {
-        await db.query(ADD_DECKS_NAME_COLUMN);
+        await initQuery('add decks.name column', ADD_DECKS_NAME_COLUMN);
     }
-    await db.query(CREATE_DECK_CARDS_TABLE);
-    const [quantityColumn] = await db.query(SELECT_DECK_CARDS_QUANTITY_COLUMN);
+    await initQuery('create deck_cards table', CREATE_DECK_CARDS_TABLE);
+    const [quantityColumn] = await initQuery('check deck_cards.quantity column', SELECT_DECK_CARDS_QUANTITY_COLUMN);
     if (!quantityColumn.length) {
-        await db.query(ADD_DECK_CARDS_QUANTITY_COLUMN);
+        await initQuery('add deck_cards.quantity column', ADD_DECK_CARDS_QUANTITY_COLUMN);
     }
-    await db.query(DELETE_EXPIRED_SESSIONS);
+    await initQuery('delete expired sessions', DELETE_EXPIRED_SESSIONS);
 }
 
 const MAX_CARD_QUANTITY = 999;
