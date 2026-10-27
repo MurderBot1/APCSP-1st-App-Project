@@ -104,16 +104,27 @@ async function initQuery(label, sql) {
     return result;
 }
 
+const SELECT_EXISTING_TABLES = 'SELECT table_name AS name FROM information_schema.tables WHERE table_schema = DATABASE()';
+
 async function initDatabase() {
-    await initQuery('create users table', CREATE_USERS_TABLE);
-    await initQuery('create sessions table', CREATE_SESSIONS_TABLE);
-    await initQuery('create decks table', CREATE_DECKS_TABLE);
-    await initQuery('create user_settings table', CREATE_USER_SETTINGS_TABLE);
+    // Skip CREATE TABLE when the table exists: even IF NOT EXISTS waits on the host's backup lock
+    const [tables] = await initQuery('list existing tables', SELECT_EXISTING_TABLES);
+    const existing = new Set(tables.map((row) => row.name.toLowerCase()));
+    const createIfMissing = async (name, sql) => {
+        if (!existing.has(name)) {
+            await initQuery(`create ${name} table`, sql);
+        }
+    };
+
+    await createIfMissing('users', CREATE_USERS_TABLE);
+    await createIfMissing('sessions', CREATE_SESSIONS_TABLE);
+    await createIfMissing('decks', CREATE_DECKS_TABLE);
+    await createIfMissing('user_settings', CREATE_USER_SETTINGS_TABLE);
     const [nameColumn] = await initQuery('check decks.name column', SELECT_DECKS_NAME_COLUMN);
     if (!nameColumn.length) {
         await initQuery('add decks.name column', ADD_DECKS_NAME_COLUMN);
     }
-    await initQuery('create deck_cards table', CREATE_DECK_CARDS_TABLE);
+    await createIfMissing('deck_cards', CREATE_DECK_CARDS_TABLE);
     const [quantityColumn] = await initQuery('check deck_cards.quantity column', SELECT_DECK_CARDS_QUANTITY_COLUMN);
     if (!quantityColumn.length) {
         await initQuery('add deck_cards.quantity column', ADD_DECK_CARDS_QUANTITY_COLUMN);
